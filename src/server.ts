@@ -3,28 +3,30 @@ import { connectDatabase, disconnectDatabase } from './config/database';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { getRedisClient, disconnectRedis } from './config/redis';
+import { createUserIndexes } from './modules/users/user.model';
 
 async function bootstrap(): Promise<void> {
   // 1. Conectar base de datos
   await connectDatabase();
 
-  // 2. Inicializar Redis (la conexión se establece al llamar getRedisClient)
+    // 2. Crear índices
+  await createUserIndexes();
+
+    // 3. Inicializar Redis
   getRedisClient();
 
-  // 3. Crear app Express
+   // 4. Crear app Express
   const app = createApp();
 
-  // 4. Levantar servidor HTTP
+
+  // 5. Levantar servidor HTTP
   const server = app.listen(env.PORT, () => {
     logger.info(`🚀  Server running on port ${env.PORT} [${env.NODE_ENV}]`);
   });
 
-  // ── Graceful shutdown ──────────────────────────────────────────────────────
-  // Cuando Heroku o Docker manden SIGTERM, cerramos limpiamente
   async function shutdown(signal: string): Promise<void> {
     logger.info(`${signal} received — shutting down gracefully...`);
 
-    // Dejar de aceptar nuevas conexiones
     server.close(async () => {
       try {
         await disconnectDatabase();
@@ -37,7 +39,6 @@ async function bootstrap(): Promise<void> {
       }
     });
 
-    // Forzar cierre si tarda más de 10s (evita colgarse)
     setTimeout(() => {
       logger.error('Forced shutdown after timeout');
       process.exit(1);
@@ -47,7 +48,6 @@ async function bootstrap(): Promise<void> {
   process.on('SIGTERM', () => shutdown('SIGTERM'));
   process.on('SIGINT', () => shutdown('SIGINT'));
 
-  // Capturar errores no manejados — loggear y salir limpiamente
   process.on('unhandledRejection', (reason) => {
     logger.fatal({ reason }, 'Unhandled Promise rejection');
     process.exit(1);
