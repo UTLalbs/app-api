@@ -1,6 +1,7 @@
 import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate';
+import { authorize } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
 
 import {
@@ -21,34 +22,8 @@ export const organizationRouter = Router();
 // Todas las rutas de organizations requieren autenticación
 organizationRouter.use( authenticate );
 
-
-// GET /api/v1/organizations
-organizationRouter.get('/', getOrganizations);
-
-// GET /api/v1/organizations/:id
-organizationRouter.get(
-  '/:id',
-  validate(orgIdParamSchema),
-  getOrganization,
-);
-
-// POST /api/v1/organizations
-organizationRouter.post(
-  '/',
-  validate(createOrganizationSchema),
-  createOrganization,
-);
-
-// PATCH /api/v1/organizations/:id
-organizationRouter.patch(
-  '/:id',
-  validate(updateOrganizationSchema),
-  updateOrganization,
-);
-
-// DELETE /api/v1/organizations/:id
-organizationRouter.delete(
-  '/:id',
-  validate(orgIdParamSchema),
-  deleteOrganization,
-);
+organizationRouter.get('/',    authorize('organizations', 'read'),   getOrganizations);
+organizationRouter.get('/:id', validate(orgIdParamSchema), authorize('organizations', 'read'),  getOrganization);
+organizationRouter.post('/',   validate(createOrganizationSchema),   authorize('organizations', 'write'), createOrganization);
+organizationRouter.patch('/:id', validate(updateOrganizationSchema), authorize('organizations', 'write'), updateOrganization);
+organizationRouter.delete('/:id', validate(orgIdParamSchema),        authorize('organizations', 'delete'), deleteOrganization);

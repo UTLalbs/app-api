@@ -23,6 +23,7 @@ function toUser(doc: UserDocument): User {
 		status: doc.status,
 		orgId: doc.orgId.toHexString(),
 		roles: doc.roles.map((r) => r.toHexString()),
+		clientId: doc.clientId ? doc.clientId.toHexString() : null,
 		identities: {
 			googleSub: doc.identities.googleSub,
 			microsoftOid: doc.identities.microsoftOid,
@@ -107,6 +108,7 @@ export async function createUser(dto: CreateUserDto): Promise<User> {
 		status: "pending",
 		orgId: new ObjectId(dto.orgId),
 		roles: (dto.roles ?? []).map((r) => new ObjectId(r)),
+		clientId: dto.clientId ? new ObjectId(dto.clientId) : null,
 		identities: dto.identities ?? {},
 		passwordHistory: [],
 		createdAt: now,
@@ -138,7 +140,7 @@ export async function updateUser(
 ): Promise<User> {
 	if (!ObjectId.isValid(id)) throw new NotFoundError("User");
 
-	const {roles, ...rest} = dto;
+	const {roles, clientId, ...rest} = dto;
 
 	const result = await getUserCollection().findOneAndUpdate(
 		{_id: new ObjectId(id), orgId: new ObjectId(orgId), deletedAt: null},
@@ -146,6 +148,9 @@ export async function updateUser(
 			$set: {
 				...rest,
 				...(roles && {roles: roles.map((r) => new ObjectId(r))}),
+				...(clientId !== undefined && {
+					clientId: clientId ? new ObjectId(clientId) : null,
+				}),
 				updatedAt: new Date(),
 			},
 		},

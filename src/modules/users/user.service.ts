@@ -1,4 +1,5 @@
 import { logger } from '../../config/logger';
+import { invalidatePermissionsCache } from '../../middleware/authorize';
 import { NotFoundError, ForbiddenError } from '../../shared/errors/AppError';
 
 import {
@@ -63,7 +64,13 @@ export async function editUser(
 
   if (!existing) throw new NotFoundError('User');
 
-  const updated = await updateUser(id, orgId, dto);
+  const updated = await updateUser( id, orgId, dto );
+  
+  // Si cambiaron los roles, invalidar cache de permisos
+  if (dto.roles) {
+    await invalidatePermissionsCache(id);
+  }
+
 
   logger.info({ userId: id }, 'User updated');
 
@@ -84,7 +91,10 @@ export async function changeUserStatus(
   const existing = await findUserById(id, orgId);
   if (!existing) throw new NotFoundError('User');
 
-  const updated = await updateUser(id, orgId, { status });
+  const updated = await updateUser( id, orgId, { status } );
+  
+  // Si cambiaron los roles, invalidar cache de permisos
+  await invalidatePermissionsCache(id);
 
   logger.info({ userId: id, status, actorId }, 'User status changed');
 

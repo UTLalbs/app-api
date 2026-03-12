@@ -7,6 +7,7 @@ export interface UserDocument {
   status: UserStatus;
   orgId: ObjectId;
   roles: ObjectId[];
+   clientId: ObjectId | null;
   identities: UserIdentities;
   passwordHistory: PasswordHistoryEntry[];
   lastLoginAt?: Date;
@@ -22,6 +23,7 @@ export interface User {
   status: UserStatus;
   orgId: string;
   roles: string[];
+  clientId: string | null;
   identities: UserIdentities;
   lastLoginAt?: Date;
   createdAt: Date;
@@ -47,10 +49,12 @@ export interface CreateUserDto {
   orgId: string;
   roles?: string[];
   identities?: Partial<UserIdentities>;
+  clientId?: string | null;
 }
 
 export interface UpdateUserDto {
   displayName?: string;
   status?: UserStatus;
   roles?: string[];
+  clientId?: string | null;
 }

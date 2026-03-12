@@ -4,7 +4,8 @@ export interface AuthenticatedUser {
   displayName: string;
   orgId: string;
   roles: string[];
-  resolvedPermissions: ResolvedPermission[];
+  clientId?: string | null;
+  resolvedPermissions: Record<string, string[]>;
 }
 
 export interface ResolvedPermission {

@@ -62,7 +62,7 @@ export async function authenticate(
       displayName: user.displayName,
       orgId: user.orgId,
       roles: user.roles,
-      resolvedPermissions: [],   // Phase 4 — RBAC llenará esto
+      resolvedPermissions: {},   // Phase 4 — RBAC llenará esto
     };
 
     // ── Guardar en cache Redis ─────────────────────────────────────────────
