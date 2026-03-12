@@ -17,7 +17,6 @@ import type {
 export const getOrganization = asyncHandler(
   async (req: Request, res: Response) => {
     const org = await getOrganizationById(String(req.params.id));
-
     res.json({ success: true, data: org });
   },
 );
@@ -25,7 +24,6 @@ export const getOrganization = asyncHandler(
 export const getOrganizations = asyncHandler(
   async (_req: Request, res: Response) => {
     const orgs = await listOrganizations();
-
     res.json({ success: true, data: orgs, meta: { total: orgs.length } });
   },
 );
@@ -37,7 +35,6 @@ export const createOrganization = asyncHandler(
       slug: req.body.slug,
       settings: req.body.settings,
     });
-
     res.status(201).json({ success: true, data: org });
   },
 );
@@ -49,7 +46,6 @@ export const updateOrganization = asyncHandler(
       status: req.body.status,
       settings: req.body.settings,
     });
-
     res.json({ success: true, data: org });
   },
 );
@@ -57,7 +53,6 @@ export const updateOrganization = asyncHandler(
 export const deleteOrganization = asyncHandler(
   async (req: Request, res: Response) => {
     await removeOrganization(String(req.params.id));
-
     res.status(204).send();
   },
 );

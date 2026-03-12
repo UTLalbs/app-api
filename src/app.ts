@@ -1,3 +1,4 @@
+import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
@@ -9,6 +10,7 @@ import { logger } from './config/logger';
 import { getRedisClient } from './config/redis';
 import { errorHandler } from './middleware/errorHandler';
 import { requestId } from './middleware/requestId';
+import { authRouter } from './modules/auth/auth.routes';
 import { organizationRouter } from './modules/organizations/organization.routes';
 import { userRouter } from './modules/users/user.routes';
 
@@ -30,6 +32,7 @@ export function createApp(): express.Application {
   // ── Parsers ────────────────────────────────────────────────────────────────
   app.use(express.json({ limit: '1mb' }));
   app.use(express.urlencoded({ extended: true, limit: '1mb' }));
+  app.use(cookieParser());
 
   // ── Observabilidad ─────────────────────────────────────────────────────────
   app.use(requestId);
@@ -77,7 +80,7 @@ export function createApp(): express.Application {
   });
 
   // ── API routes ────────────────────────────────────────────────────────────
-  // app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/auth', authRouter);
   app.use('/api/v1/organizations', organizationRouter);
   app.use('/api/v1/users', userRouter);
 

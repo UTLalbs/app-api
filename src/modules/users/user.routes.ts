@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { authenticate } from '../../middleware/authenticate';
 import { validate } from '../../middleware/validate';
 
 import {
@@ -19,6 +20,11 @@ import {
 } from './user.validator';
 
 export const userRouter = Router();
+
+
+// Todas las rutas de users requieren autenticación
+userRouter.use(authenticate);
+
 
 // GET /api/v1/users
 userRouter.get(

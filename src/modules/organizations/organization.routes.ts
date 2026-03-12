@@ -1,5 +1,6 @@
 import { Router } from 'express';
 
+import { authenticate } from '../../middleware/authenticate';
 import { validate } from '../../middleware/validate';
 
 import {
@@ -16,6 +17,10 @@ import {
 } from './organization.validator';
 
 export const organizationRouter = Router();
+
+// Todas las rutas de organizations requieren autenticación
+organizationRouter.use( authenticate );
+
 
 // GET /api/v1/organizations
 organizationRouter.get('/', getOrganizations);
