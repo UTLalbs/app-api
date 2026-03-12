@@ -1,62 +1,67 @@
-import { createApp } from './app';
-import { connectDatabase, disconnectDatabase } from './config/database';
-import { env } from './config/env';
-import { logger } from './config/logger';
-import { getRedisClient, disconnectRedis } from './config/redis';
-import { createUserIndexes } from './modules/users/user.model';
+import {createApp} from "./app";
+import {connectDatabase, disconnectDatabase} from "./config/database";
+import {env} from "./config/env";
+import {logger} from "./config/logger";
+import {getRedisClient, disconnectRedis} from "./config/redis";
+import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
+import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
+import {createOrganizationIndexes} from "./modules/organizations/organization.model";
+import {createUserIndexes} from "./modules/users/user.model";
 
 async function bootstrap(): Promise<void> {
-  // 1. Conectar base de datos
-  await connectDatabase();
+	//  Conectar base de datos
+	await connectDatabase();
 
-    // 2. Crear índices
-  await createUserIndexes();
+	// Índices — orden no importa, son independientes
+	await Promise.all([createUserIndexes(), createOrganizationIndexes()]);
 
-    // 3. Inicializar Redis
-  getRedisClient();
+	// Inicializar OIDC strategies en paralelo
+	await Promise.all([initGoogleStrategy(), initMicrosoftStrategy()]);
 
-   // 4. Crear app Express
-  const app = createApp();
+	// Inicializar Redis
+	getRedisClient();
 
+	// 4. Crear app Express
+	const app = createApp();
 
-  // 5. Levantar servidor HTTP
-  const server = app.listen(env.PORT, () => {
-    logger.info(`🚀  Server running on port ${env.PORT} [${env.NODE_ENV}]`);
-  });
+	// 5. Levantar servidor HTTP
+	const server = app.listen(env.PORT, () => {
+		logger.info(`🚀  Server running on port ${env.PORT} [${env.NODE_ENV}]`);
+	});
 
-  async function shutdown(signal: string): Promise<void> {
-    logger.info(`${signal} received — shutting down gracefully...`);
+	async function shutdown(signal: string): Promise<void> {
+		logger.info(`${signal} received — shutting down gracefully...`);
 
-    server.close(async () => {
-      try {
-        await disconnectDatabase();
-        await disconnectRedis();
-        logger.info('Graceful shutdown complete');
-        process.exit(0);
-      } catch (err) {
-        logger.error({ err }, 'Error during shutdown');
-        process.exit(1);
-      }
-    });
+		server.close(async () => {
+			try {
+				await disconnectDatabase();
+				await disconnectRedis();
+				logger.info("Graceful shutdown complete");
+				process.exit(0);
+			} catch (err) {
+				logger.error({err}, "Error during shutdown");
+				process.exit(1);
+			}
+		});
 
-    setTimeout(() => {
-      logger.error('Forced shutdown after timeout');
-      process.exit(1);
-    }, 10_000);
-  }
+		setTimeout(() => {
+			logger.error("Forced shutdown after timeout");
+			process.exit(1);
+		}, 10_000);
+	}
 
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+	process.on("SIGTERM", () => shutdown("SIGTERM"));
+	process.on("SIGINT", () => shutdown("SIGINT"));
 
-  process.on('unhandledRejection', (reason) => {
-    logger.fatal({ reason }, 'Unhandled Promise rejection');
-    process.exit(1);
-  });
+	process.on("unhandledRejection", (reason) => {
+		logger.fatal({reason}, "Unhandled Promise rejection");
+		process.exit(1);
+	});
 
-  process.on('uncaughtException', (err) => {
-    logger.fatal({ err }, 'Uncaught exception');
-    process.exit(1);
-  });
+	process.on("uncaughtException", (err) => {
+		logger.fatal({err}, "Uncaught exception");
+		process.exit(1);
+	});
 }
 
 bootstrap();

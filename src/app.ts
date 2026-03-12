@@ -9,6 +9,7 @@ import { logger } from './config/logger';
 import { getRedisClient } from './config/redis';
 import { errorHandler } from './middleware/errorHandler';
 import { requestId } from './middleware/requestId';
+import { organizationRouter } from './modules/organizations/organization.routes';
 import { userRouter } from './modules/users/user.routes';
 
 export function createApp(): express.Application {
@@ -77,6 +78,7 @@ export function createApp(): express.Application {
 
   // ── API routes ────────────────────────────────────────────────────────────
   // app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/organizations', organizationRouter);
   app.use('/api/v1/users', userRouter);
 
   // ── 404 handler ───────────────────────────────────────────────────────────
