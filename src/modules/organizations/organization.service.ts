@@ -1,5 +1,12 @@
 import { logger } from '../../config/logger';
+import {
+  cacheDel,
+  getOrSet,
+  CacheKeys,
+  CacheTTL,
+} from '../../infrastructure/cache/cache.service';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError';
+
 
 import {
   findOrganizationById,
@@ -27,15 +34,11 @@ function generateSlug(name: string): string {
 // ── Consultas ──────────────────────────────────────────────────────────────
 
 export async function getOrganizationById(id: string): Promise<Organization> {
-  const org = await findOrganizationById(id);
-
-  if (!org) throw new NotFoundError('Organization');
-
-  return org;
-}
-
-export async function getOrganizationBySlug(slug: string): Promise<Organization> {
-  const org = await findOrganizationBySlug(slug);
+  const org = await getOrSet(
+    CacheKeys.orgOne(id),
+    () => findOrganizationById(id),
+    CacheTTL.LONG,
+  );
 
   if (!org) throw new NotFoundError('Organization');
 
@@ -43,31 +46,29 @@ export async function getOrganizationBySlug(slug: string): Promise<Organization>
 }
 
 export async function listOrganizations(): Promise<Organization[]> {
-  return findAllOrganizations();
+  return getOrSet(
+    CacheKeys.orgList(),
+    () => findAllOrganizations(),
+    CacheTTL.MEDIUM,
+  );
 }
-
-// ── Creación ───────────────────────────────────────────────────────────────
 
 export async function registerOrganization(
   dto: CreateOrganizationDto,
 ): Promise<Organization> {
-  // Generar slug si no viene en el DTO
   const slug = dto.slug ?? generateSlug(dto.name);
 
-  // Regla: el slug debe ser único
   const existing = await findOrganizationBySlug(slug);
-  if (existing) {
-    throw new ConflictError(`Slug "${slug}" is already taken`);
-  }
+  if (existing) throw new ConflictError('Organization slug already exists');
 
   const org = await createOrganization({ ...dto, slug });
 
-  logger.info({ orgId: org.id, slug: org.slug }, 'Organization registered');
+  await cacheDel(CacheKeys.orgList());
+
+  logger.info({ orgId: org.id, slug }, 'Organization registered');
 
   return org;
 }
-
-// ── Actualización ──────────────────────────────────────────────────────────
 
 export async function editOrganization(
   id: string,
@@ -78,18 +79,26 @@ export async function editOrganization(
 
   const updated = await updateOrganization(id, dto);
 
+  await Promise.all([
+    cacheDel(CacheKeys.orgOne(id)),
+    cacheDel(CacheKeys.orgList()),
+  ]);
+
   logger.info({ orgId: id }, 'Organization updated');
 
   return updated;
 }
-
-// ── Eliminación ────────────────────────────────────────────────────────────
 
 export async function removeOrganization(id: string): Promise<void> {
   const existing = await findOrganizationById(id);
   if (!existing) throw new NotFoundError('Organization');
 
   await softDeleteOrganization(id);
+
+  await Promise.all([
+    cacheDel(CacheKeys.orgOne(id)),
+    cacheDel(CacheKeys.orgList()),
+  ]);
 
   logger.info({ orgId: id }, 'Organization removed');
 }
