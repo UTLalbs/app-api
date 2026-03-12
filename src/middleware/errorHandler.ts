@@ -1,3 +1,4 @@
+import { BSONError } from 'bson';
 import type { NextFunction, Request, Response } from 'express';
 import { MongoError, MongoServerError } from 'mongodb';
 
@@ -43,6 +44,21 @@ export function errorHandler(
     } satisfies ErrorResponse);
     return;
   }
+
+  // ── BSONError — ID inválido ────────────────────────────────────────────────
+  if (err instanceof BSONError) {
+    res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_ID',
+        message: 'Invalid ID format — must be a 24 character hex string',
+        requestId,
+      },
+    } satisfies ErrorResponse);
+    return;
+  }
+
+
 
   // ── Duplicate key de MongoDB (código 11000) ────────────────────────────────
   if (err instanceof MongoServerError && err.code === 11000) {
