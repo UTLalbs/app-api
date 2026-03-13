@@ -5,3 +5,4 @@ dist/
 *.log
 coverage/
 .nyc_output/
+.env.test
