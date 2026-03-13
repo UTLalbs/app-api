@@ -1,0 +1,16 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+*.log
+coverage
+.nyc_output
+README.md
+docker-compose*.yml
+.eslintrc*
+.prettierrc*
+jest.config.*
+jest.setup.*
+src/__tests__
