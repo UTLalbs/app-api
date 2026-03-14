@@ -17,7 +17,10 @@
 		"test:watch": "jest --watch",
 		"test:coverage": "jest --coverage",
 		"test:unit": "jest --testPathPattern=unit",
-		"test:integration": "jest --testPathPattern=integration"
+		"test:integration": "jest --testPathPattern=integration",
+		"docker:up": "docker compose up -d",
+		"docker:down": "docker compose down",
+		"docker:logs": "docker compose logs -f"
 	},
 	"keywords": [],
 	"author": "",
