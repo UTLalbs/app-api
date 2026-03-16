@@ -1,66 +1,70 @@
-import { z } from 'zod';
+import {z} from "zod";
 
-// ── Reutilizables ──────────────────────────────────────────────────────────
+// ── Subdocumentos ──────────────────────────────────────────────────────────
 
-const objectIdSchema = z
-  .string()
-  .regex(/^[a-f\d]{24}$/i, 'Invalid ID format');
-
-const slugSchema = z
-  .string()
-  .min(2, 'Slug must be at least 2 characters')
-  .max(60, 'Slug must not exceed 60 characters')
-  .regex(/^[a-z0-9-]+$/, 'Slug can only contain lowercase letters, numbers and hyphens')
-  .trim();
-
-const orgStatusSchema = z.enum(['active', 'suspended', 'trial']);
-
-const orgSettingsSchema = z.object({
-  allowedEmailDomains: z
-    .array(z.string().email('Each domain entry must be a valid email domain'))
-    .optional(),
-  maxUsers: z
-    .number()
-    .int('Max users must be an integer')
-    .min(1, 'Max users must be at least 1')
-    .max(10000, 'Max users cannot exceed 10000')
-    .optional(),
+const featuresSchema = z.object({
+	gps: z.boolean().default(false),
+	invoicing: z.boolean().default(false),
+	cartaPorte: z.boolean().default(false),
+	fuelControl: z.boolean().default(false),
+	payroll: z.boolean().default(false),
+	vectorSearch: z.boolean().default(false),
 });
 
-// ── Schemas por operación ──────────────────────────────────────────────────
+const settingsSchema = z.object({
+	timezone: z.string().default("America/Mexico_City"),
+	distanceUnit: z.enum(["km", "mi"]).default("km"),
+	currency: z.array(z.string()).default(["MXN"]),
+	gpsUpdateInterval: z.coerce.number().min(5).max(300).default(30),
+	maxUsers: z.coerce.number().min(1).default(10),
+	allowedEmailDomains: z.array(z.string()).default([]),
+	features: featuresSchema.default({
+		gps: false,
+		invoicing: false,
+		cartaPorte: false,
+		fuelControl: false,
+		payroll: false,
+		vectorSearch: false,
+	}),
+});
+
+const fiscalDataSchema = z.object({
+	rfc: z.string().min(12).max(13),
+	razonSocial: z.string().min(1),
+	regimenFiscal: z.object({
+		code: z.string().min(1),
+		name: z.string().min(1),
+	}),
+});
+
+// ── Schemas de validación ──────────────────────────────────────────────────
 
 export const createOrganizationSchema = z.object({
-  body: z.object({
-    name: z
-      .string({ error: 'Name is required' })
-      .min(2, 'Name must be at least 2 characters')
-      .max(100, 'Name must not exceed 100 characters')
-      .trim(),
-    slug: slugSchema.optional(),
-    settings: orgSettingsSchema.optional(),
-  }),
+	body: z.object({
+		name: z.string().min(2).max(100),
+		slug: z
+			.string()
+			.min(2)
+			.max(100)
+			.regex(/^[a-z0-9-]+$/, "Solo minúsculas, números y guiones")
+			.optional(),
+		settings: settingsSchema.partial().optional(),
+		fiscalData: fiscalDataSchema.optional().nullable(),
+	}),
 });
 
 export const updateOrganizationSchema = z.object({
-  params: z.object({
-    id: objectIdSchema,
-  }),
-  body: z.object({
-    name: z
-      .string()
-      .min(2, 'Name must be at least 2 characters')
-      .max(100, 'Name must not exceed 100 characters')
-      .trim()
-      .optional(),
-    status: orgStatusSchema.optional(),
-    settings: orgSettingsSchema.optional(),
-  }),
+	params: z.object({id: z.string().length(24)}),
+	body: z.object({
+		name: z.string().min(2).max(100).optional(),
+		status: z.enum(["active", "suspended", "cancelled"]).optional(),
+		settings: settingsSchema.partial().optional(),
+		fiscalData: fiscalDataSchema.optional().nullable(),
+	}),
 });
 
 export const orgIdParamSchema = z.object({
-  params: z.object({
-    id: objectIdSchema,
-  }),
+	params: z.object({id: z.string().length(24)}),
 });
 
 // ── Tipos inferidos ────────────────────────────────────────────────────────

@@ -13,18 +13,18 @@ export async function createOrganizationIndexes(): Promise<void> {
   const collection = getOrganizationCollection();
 
   await collection.createIndexes([
-    // Slug único — identificador URL-friendly
+    // slug único global — inmutable una vez creado
     {
       key: { slug: 1 },
       unique: true,
       name: 'slug_unique',
     },
-    // Búsqueda por status
+    // búsquedas por status + fecha
     {
-      key: { status: 1 },
-      name: 'status',
+      key: { status: 1, createdAt: -1 },
+      name: 'status_createdAt',
     },
-    // Soft delete
+    // soft delete
     {
       key: { deletedAt: 1 },
       name: 'deletedAt',

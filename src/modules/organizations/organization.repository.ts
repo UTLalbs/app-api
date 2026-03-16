@@ -19,6 +19,7 @@ function toOrganization(doc: OrganizationDocument): Organization {
     slug: doc.slug,
     status: doc.status,
     settings: doc.settings,
+    fiscalData: doc.fiscalData ?? null,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };
@@ -62,11 +63,25 @@ export async function createOrganization(
   const doc: Omit<OrganizationDocument, '_id'> = {
     name: dto.name.trim(),
     slug: dto.slug.toLowerCase().trim(),
-    status: 'trial',
+    status: 'active', // Valor por defecto al crear una organización
+    fiscalData: dto.fiscalData ?? null,
     settings: {
-      allowedEmailDomains: dto.settings?.allowedEmailDomains ?? [],
-      maxUsers: dto.settings?.maxUsers ?? 10,
+    timezone: 'America/Mexico_City',
+    distanceUnit: 'km',
+    currency: ['MXN'],
+    gpsUpdateInterval: 30,
+    maxUsers: dto.settings?.maxUsers ?? 10,
+    allowedEmailDomains: dto.settings?.allowedEmailDomains ?? [],
+    features: {
+      gps: false,
+      invoicing: false,
+      cartaPorte: false,
+      fuelControl: false,
+      payroll: false,
+      vectorSearch: false,
+      ...dto.settings?.features,
     },
+  },
     createdAt: now,
     updatedAt: now,
     deletedAt: null,
