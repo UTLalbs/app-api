@@ -53,6 +53,7 @@ export async function loginWithOIDC(
 				existingUser.id,
 				providerField,
 				profile.subjectId,
+				profile.email,
 			);
 		} else {
 			// Regla 5: usuario completamente nuevo — crear cuenta
@@ -66,10 +67,23 @@ export async function loginWithOIDC(
 				displayName: profile.displayName,
 				orgId,
 				identities: {
-					...(profile.provider === "google" && {googleSub: profile.subjectId}),
-					...(profile.provider === "microsoft" && {
-						microsoftOid: profile.subjectId,
-					}),
+					local: null,
+					google:
+						profile.provider === "google"
+							? {
+									sub: profile.subjectId,
+									email: profile.email,
+									connectedAt: new Date(),
+								}
+							: null,
+					microsoft:
+						profile.provider === "microsoft"
+							? {
+									sub: profile.subjectId,
+									email: profile.email,
+									connectedAt: new Date(),
+								}
+							: null,
 				},
 			});
 
@@ -78,7 +92,7 @@ export async function loginWithOIDC(
 	}
 
 	// Regla 6: cuenta deshabilitada no puede autenticarse
-	if (user.status === "disabled") {
+	if (user.status === "inactive") {
 		logger.warn({userId: user.id}, "Disabled user attempted login");
 		throw new ForbiddenError("Account is disabled");
 	}
@@ -140,10 +154,10 @@ export async function refreshSession(refreshToken: string): Promise<TokenPair> {
 		throw new AuthError("User not found");
 	}
 
-	if (user.status === "disabled") {
+	if (user.status === "inactive") {
+		logger.warn({userId: user.id}, "Disabled user attempted login");
 		throw new ForbiddenError("Account is disabled");
 	}
-
 	// Rotar el refresh token — revocar el actual y emitir uno nuevo
 	await revokeRefreshToken(payload.sub, payload.jti);
 	const tokens = await reissue(user);

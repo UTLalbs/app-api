@@ -1,9 +1,11 @@
+import type { UserRoleDto } from '../users/user.types';
+
 export interface AuthenticatedUser {
   id: string;
   email: string;
   displayName: string;
   orgId: string;
-  roles: string[];
+  roles: UserRoleDto[];
   clientId?: string | null;
   resolvedPermissions: Record<string, string[]>;
 }
@@ -32,7 +34,7 @@ export interface AccessTokenPayload {
   sub: string;           // userId
   email: string;
   orgId: string;
-  roles: string[];
+  roles: UserRoleDto[];
 }
 
 export interface RefreshTokenPayload {

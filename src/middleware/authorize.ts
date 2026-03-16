@@ -4,6 +4,7 @@ import { ObjectId } from 'mongodb';
 import { getRedisClient } from '../config/redis';
 import { getRoleCollection } from '../modules/roles/role.model';
 import type { Action } from '../modules/roles/role.types';
+import type { UserRoleDto } from '../modules/users/user.types';
 import { ForbiddenError } from '../shared/errors/AppError';
 
 // TTL del cache de permisos en Redis — 5 minutos
@@ -51,7 +52,7 @@ async function resolvePermissions(
 
 async function getResolvedPermissions(
   userId: string,
-  roleIds: string[],
+  roles: UserRoleDto[],
 ): Promise<ResolvedPermissions> {
   const cacheKey = permissionsCacheKey(userId);
   const cached = await getRedisClient().get(cacheKey);
@@ -62,10 +63,11 @@ async function getResolvedPermissions(
     const resolved: ResolvedPermissions = {};
     for (const [resource, actions] of Object.entries(raw)) {
       resolved[resource] = new Set(actions);
-    }hasPermission
+    }
     return resolved;
   }
 
+  const roleIds = roles.map((r) => r.roleId);  
   const resolved = await resolvePermissions(roleIds);
 
   // Serializar Sets a arrays para Redis

@@ -51,7 +51,7 @@ export async function authenticate(
       throw new AuthError('User not found');
     }
 
-    if (user.status === 'disabled') {
+    if (user.status === 'inactive') {
       throw new AuthError('Account is disabled');
     }
 

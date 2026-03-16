@@ -13,34 +13,55 @@ export async function createUserIndexes(): Promise<void> {
   const collection = getUserCollection();
 
   await collection.createIndexes([
-    // Email único — base del identity linking entre providers
+    // email único global
     {
       key: { email: 1 },
       unique: true,
       name: 'email_unique',
     },
-    // Búsqueda de usuarios por organización + estado
+    // buscar usuarios activos por organización
     {
       key: { orgId: 1, status: 1 },
       name: 'orgId_status',
     },
-    // Soft delete — todos los queries filtran por esto
+    // buscar por tipo y status
     {
-      key: { deletedAt: 1 },
-      name: 'deletedAt',
+      key: { orgId: 1, userType: 1, status: 1 },
+      name: 'orgId_userType_status',
     },
-    // SSO identity lookup — Google
-    // sparse: true porque no todos los usuarios tienen googleSub
+    // soft delete
     {
-      key: { 'identities.googleSub': 1 },
-      sparse: true,
-      name: 'identities_googleSub',
+      key: { orgId: 1, deletedAt: 1 },
+      name: 'orgId_deletedAt',
     },
-    // SSO identity lookup — Microsoft
+    // operadores disponibles — sparse porque solo aplica a drivers
     {
-      key: { 'identities.microsoftOid': 1 },
+      key: { orgId: 1, 'employeeProfile.vehicleOperator.driverStatus': 1 },
       sparse: true,
-      name: 'identities_microsoftOid',
+      name: 'orgId_driverStatus',
+    },
+    // unidad asignada al operador — sparse
+    {
+      key: { orgId: 1, 'employeeProfile.vehicleOperator.currentUnitId': 1 },
+      sparse: true,
+      name: 'orgId_currentUnitId',
+    },
+    // contactos de cliente
+    {
+      key: { 'clientMemberships.clientId': 1 },
+      sparse: true,
+      name: 'clientMemberships_clientId',
+    },
+    // identidades SSO — sparse
+    {
+      key: { 'identities.google.sub': 1 },
+      sparse: true,
+      name: 'identities_google_sub',
+    },
+    {
+      key: { 'identities.microsoft.sub': 1 },
+      sparse: true,
+      name: 'identities_microsoft_sub',
     },
   ]);
 
