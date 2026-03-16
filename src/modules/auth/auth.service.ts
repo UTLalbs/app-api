@@ -135,63 +135,58 @@ export async function loginWithOIDC(
 }
 
 // ── Refresh token ──────────────────────────────────────────────────────────
-
 export async function refreshSession(refreshToken: string): Promise<TokenPair> {
-	const {
-		verifyRefreshToken,
-		revokeRefreshToken,
-		issueTokenPair: reissue,
-	} = await import("./token.service");
-	const {findUserById} = await import("../users/user.repository");
+  const { verifyRefreshToken, issueTokenPair: reissue } = await import('./token.service');
+  const { findUserById } = await import('../users/user.repository');
 
-	// Verificar que el refresh token es válido y existe en Redis
-	const payload = await verifyRefreshToken(refreshToken);
+  // Verificar que el refresh token existe en MongoDB y no ha sido usado
+  const payload = await verifyRefreshToken(refreshToken);
 
-	// Obtener el usuario actualizado — puede haber cambiado roles desde el último login
-	const user = await findUserById(payload.sub, "");
+  // Revocar el token actual — rotación
+  const { revokeRefreshToken } = await import('./token.service');
+  await revokeRefreshToken(payload.sub, payload.jti);
 
-	if (!user) {
-		throw new AuthError("User not found");
-	}
+  // Obtener usuario actualizado
+  const user = await findUserById(payload.sub, '');
 
-	if (user.status === "inactive") {
-		logger.warn({userId: user.id}, "Disabled user attempted login");
-		throw new ForbiddenError("Account is disabled");
-	}
-	// Rotar el refresh token — revocar el actual y emitir uno nuevo
-	await revokeRefreshToken(payload.sub, payload.jti);
-	const tokens = await reissue(user);
+  if (!user) throw new AuthError('User not found');
+  if (user.status === 'inactive') throw new ForbiddenError('Account is disabled');
 
-	logger.info({userId: user.id}, "Session refreshed");
+  // Emitir nuevo par de tokens
+  const tokens = await reissue(user);
 
-	return tokens;
+  logger.info({ userId: user.id }, 'Session refreshed');
+
+  return tokens;
 }
 
 // ── Logout ─────────────────────────────────────────────────────────────────
 
 export async function logout(userId: string, jti: string): Promise<void> {
-	const {revokeRefreshToken} = await import("./token.service");
+  const { revokeRefreshToken } = await import('./token.service');
 
-	await revokeRefreshToken(userId, jti);
+  await revokeRefreshToken(userId, jti);
 
-	await createAuditEvent({
-		category: "auth",
-		action: "logout",
-		actor: {
-			id: userId,
-			email: "", // no disponible en logout por token
-			displayName: "",
-		},
-		metadata: {jti},
-	});
+  await createAuditEvent({
+    category: 'auth',
+    action: 'logout',
+    actor: { id: userId, email: '', displayName: '' },
+    metadata: { jti },
+  });
 
-	logger.info({userId}, "User logged out");
+  logger.info({ userId }, 'User logged out');
 }
 
 export async function logoutAllDevices(userId: string): Promise<void> {
-	const {revokeAllUserTokens} = await import("./token.service");
+  const { revokeAllUserTokens } = await import('./token.service');
 
-	await revokeAllUserTokens(userId);
+  await revokeAllUserTokens(userId);
 
-	logger.info({userId}, "User logged out from all devices");
+  await createAuditEvent({
+    category: 'auth',
+    action: 'logout_all',
+    actor: { id: userId, email: '', displayName: '' },
+  });
+
+  logger.info({ userId }, 'User logged out from all devices');
 }

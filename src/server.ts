@@ -8,14 +8,15 @@ import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strateg
 import { createOrganizationIndexes } from "./modules/organizations/organization.model";
 import { createRoleIndexes } from "./modules/roles/role.model";
 import { seedRoles } from "./modules/roles/role.seed";
-import {createUserIndexes} from "./modules/users/user.model";
+import { createTokenIndexes } from "./modules/tokens/token.model";
+import { createUserIndexes } from "./modules/users/user.model";
 
 async function bootstrap(): Promise<void> {
 	//  Conectar base de datos
 	await connectDatabase();
 
 	// Índices — orden no importa, son independientes
-  await Promise.all( [ createUserIndexes(), createOrganizationIndexes(), createRoleIndexes() ] );
+  await Promise.all( [ createUserIndexes(), createOrganizationIndexes(), createRoleIndexes(), createTokenIndexes() ] );
   
   // Seed — crea o actualiza roles del sistema
   await seedRoles();
