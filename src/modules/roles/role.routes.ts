@@ -21,8 +21,8 @@ export const roleRouter = Router();
 
 roleRouter.use(authenticate);
 
-roleRouter.get('/',     authorize('roles', 'read'),   getRoles);
-roleRouter.get('/:id',  validate(roleIdParamSchema),  authorize('roles', 'read'),   getRole);
-roleRouter.post('/',    validate(createRoleSchema),   authorize('roles', 'write'),  createRole);
-roleRouter.patch('/:id', validate(updateRoleSchema),  authorize('roles', 'write'),  updateRole);
-roleRouter.delete('/:id', validate(roleIdParamSchema), authorize('roles', 'delete'), deleteRole);
+roleRouter.get('/',     authorize('roles', 'read'),    getRoles);
+roleRouter.get('/:id',  validate(roleIdParamSchema),   authorize('roles', 'read'),    getRole);
+roleRouter.post('/',    validate(createRoleSchema),    authorize('roles', 'create'),  createRole);
+roleRouter.patch('/:id', validate(updateRoleSchema),   authorize('roles', 'update'),  updateRole);
+roleRouter.delete('/:id', validate(roleIdParamSchema), authorize('roles', 'delete'),  deleteRole);

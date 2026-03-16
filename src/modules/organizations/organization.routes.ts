@@ -22,8 +22,8 @@ export const organizationRouter = Router();
 // Todas las rutas de organizations requieren autenticación
 organizationRouter.use( authenticate );
 
-organizationRouter.get('/',    authorize('organizations', 'read'),   getOrganizations);
-organizationRouter.get('/:id', validate(orgIdParamSchema), authorize('organizations', 'read'),  getOrganization);
-organizationRouter.post('/',   validate(createOrganizationSchema),   authorize('organizations', 'write'), createOrganization);
-organizationRouter.patch('/:id', validate(updateOrganizationSchema), authorize('organizations', 'write'), updateOrganization);
-organizationRouter.delete('/:id', validate(orgIdParamSchema),        authorize('organizations', 'delete'), deleteOrganization);
+organizationRouter.get('/',    authorize('users', 'read'),    getOrganizations);
+organizationRouter.get('/:id', validate(orgIdParamSchema),    authorize('users', 'read'),    getOrganization);
+organizationRouter.post('/',   validate(createOrganizationSchema), authorize('users', 'create'), createOrganization);
+organizationRouter.patch('/:id', validate(updateOrganizationSchema), authorize('users', 'update'), updateOrganization);
+organizationRouter.delete('/:id', validate(orgIdParamSchema), authorize('users', 'delete'), deleteOrganization);

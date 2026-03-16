@@ -13,15 +13,18 @@ export async function createRoleIndexes(): Promise<void> {
   const collection = getRoleCollection();
 
   await collection.createIndexes([
+    // nombre único por organización
     {
       key: { name: 1, orgId: 1 },
       unique: true,
       name: 'name_orgId_unique',
     },
+    // buscar roles activos por organización
     {
-      key: { orgId: 1 },
-      name: 'orgId',
+      key: { orgId: 1, isActive: 1 },
+      name: 'orgId_isActive',
     },
+    // roles del sistema
     {
       key: { isSystem: 1 },
       name: 'isSystem',

@@ -26,9 +26,9 @@ export const userRouter = Router();
 // Todas las rutas de users requieren autenticación
 userRouter.use(authenticate);
 
-userRouter.get('/',    validate(listUsersSchema),   authorize('users', 'read'),   getUsers);
-userRouter.get('/:id', validate(userIdParamSchema), authorize('users', 'read'),   getUser);
-userRouter.post('/',   validate(createUserSchema),  authorize('users', 'write'),  createUser);
-userRouter.patch('/:id',        validate(updateUserSchema),  authorize('users', 'write'),  updateUser);
-userRouter.patch('/:id/status', validate(changeStatusSchema), authorize('users', 'write'), updateUserStatus);
+userRouter.get('/',    validate(listUsersSchema),    authorize('users', 'read'),    getUsers);
+userRouter.get('/:id', validate(userIdParamSchema),  authorize('users', 'read'),    getUser);
+userRouter.post('/',   validate(createUserSchema),   authorize('users', 'create'),  createUser);
+userRouter.patch('/:id',        validate(updateUserSchema),   authorize('users', 'update'),  updateUser);
+userRouter.patch('/:id/status', validate(changeStatusSchema), authorize('users', 'update'),  updateUserStatus);
 userRouter.delete('/:id', validate(userIdParamSchema), authorize('users', 'delete'), deleteUser);

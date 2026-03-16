@@ -62,7 +62,7 @@ async function getResolvedPermissions(
     const resolved: ResolvedPermissions = {};
     for (const [resource, actions] of Object.entries(raw)) {
       resolved[resource] = new Set(actions);
-    }
+    }hasPermission
     return resolved;
   }
 
@@ -86,20 +86,9 @@ async function getResolvedPermissions(
 
 // ── Verificar si el usuario tiene permiso ─────────────────────────────────
 
-function hasPermission(
-  resolved: ResolvedPermissions,
-  resource: string,
-  action: Action,
-): boolean {
-  // super_admin wildcard — si tiene admin en cualquier recurso "*" tiene todo
-  if (resolved['*']?.has('admin')) return true;
-
+function hasPermission(resolved: ResolvedPermissions, resource: string, action: Action): boolean {
   const resourcePermissions = resolved[resource];
   if (!resourcePermissions) return false;
-
-  // admin implica todos los otros actions sobre ese recurso
-  if (resourcePermissions.has('admin')) return true;
-
   return resourcePermissions.has(action);
 }
 

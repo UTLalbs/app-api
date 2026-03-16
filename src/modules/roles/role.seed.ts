@@ -1,159 +1,195 @@
 import { logger } from '../../config/logger';
 
 import { getRoleCollection } from './role.model';
-import type { Permission, RoleDocument } from './role.types';
+import type { Action, Permission, Resource, RoleDocument } from './role.types';
 
-// ── Definición de permisos por recurso ────────────────────────────────────
+// ── Helpers ────────────────────────────────────────────────────────────────
 
-const ALL_ACTIONS = ['read', 'write', 'delete', 'admin'] as const;
-const READ_WRITE = ['read', 'write'] as const;
-const READ_ONLY = ['read'] as const;
+const ALL_ACTIONS: Action[] = ['read', 'create', 'update', 'delete', 'cancel', 'export', 'resolve'];
+const READ_ONLY:   Action[] = ['read'];
+const FULL_CRUD:   Action[] = ['read', 'create', 'update', 'delete'];
 
-function p(resource: string, actions: readonly string[]): Permission {
-  return { resource, actions: actions as Permission['actions'] };
+function p(resource: Resource, actions: Action[]): Permission {
+  return { resource, actions };
 }
 
 // ── Definición de roles del sistema ───────────────────────────────────────
 
 const SYSTEM_ROLES: Omit<RoleDocument, '_id' | 'createdAt' | 'updatedAt'>[] = [
+
   // ── Super Admin ──────────────────────────────────────────────────────────
   {
     name: 'super_admin',
-    description: 'Acceso total al sistema',
+    description: 'Dueño del SaaS — acceso total a todos los tenants',
     orgId: null,
     isSystem: true,
+    isActive: true,
     permissions: [
-      p('services', ALL_ACTIONS),
-      p('freights', ALL_ACTIONS),
+      p('users',    ALL_ACTIONS),
+      p('roles',    ALL_ACTIONS),
+      p('orders',   ALL_ACTIONS),
+      p('trips',    ALL_ACTIONS),
+      p('fleet',    ALL_ACTIONS),
       p('tracking', ALL_ACTIONS),
-      p('units', ALL_ACTIONS),
-      p('trailers', ALL_ACTIONS),
-      p('drivers', ALL_ACTIONS),
-      p('clients', ALL_ACTIONS),
-      p('locations', ALL_ACTIONS),
-      p('hr', ALL_ACTIONS),
-      p('payroll', ALL_ACTIONS),
-      p('billing', ALL_ACTIONS),
-      p('maintenance', ALL_ACTIONS),
-      p('fuel', ALL_ACTIONS),
-      p('inventory', ALL_ACTIONS),
-      p('users', ALL_ACTIONS),
-      p('roles', ALL_ACTIONS),
-      p('organizations', ALL_ACTIONS),
-      p('reports', ALL_ACTIONS),
-      p('settings', ALL_ACTIONS),
+      p('invoices', ALL_ACTIONS),
+      p('reports',  ALL_ACTIONS),
+      p('fuel',     ALL_ACTIONS),
+      p('payroll',  ALL_ACTIONS),
+      p('clients',  ALL_ACTIONS),
+      p('alerts',   ALL_ACTIONS),
     ],
   },
 
-  // ── Admin ────────────────────────────────────────────────────────────────
+  // ── Org Admin ────────────────────────────────────────────────────────────
   {
-    name: 'admin',
-    description: 'Administrador de la organización',
+    name: 'org_admin',
+    description: 'Administrador del tenant — acceso total dentro de su organización',
     orgId: null,
     isSystem: true,
+    isActive: true,
     permissions: [
-      p('services', ALL_ACTIONS),
-      p('freights', ALL_ACTIONS),
+      p('users',    FULL_CRUD),
+      p('roles',    FULL_CRUD),
+      p('orders',   ALL_ACTIONS),
+      p('trips',    ALL_ACTIONS),
+      p('fleet',    FULL_CRUD),
       p('tracking', ALL_ACTIONS),
-      p('units', ALL_ACTIONS),
-      p('trailers', ALL_ACTIONS),
-      p('drivers', ALL_ACTIONS),
-      p('clients', ALL_ACTIONS),
-      p('locations', ALL_ACTIONS),
-      p('hr', ALL_ACTIONS),
-      p('payroll', ALL_ACTIONS),
-      p('billing', ALL_ACTIONS),
-      p('maintenance', ALL_ACTIONS),
-      p('fuel', ALL_ACTIONS),
-      p('inventory', ALL_ACTIONS),
-      p('users', ['read', 'write', 'delete']),
-      p('roles', ['read', 'write']),
-      p('reports', ALL_ACTIONS),
-      p('settings', ['read', 'write']),
+      p('invoices', ALL_ACTIONS),
+      p('reports',  ['read', 'export']),
+      p('fuel',     FULL_CRUD),
+      p('payroll',  FULL_CRUD),
+      p('clients',  FULL_CRUD),
+      p('alerts',   ALL_ACTIONS),
     ],
   },
 
-  // ── Operaciones ──────────────────────────────────────────────────────────
+  // ── Dispatcher ───────────────────────────────────────────────────────────
   {
-    name: 'operaciones',
-    description: 'Gestión de servicios y operaciones de transporte',
+    name: 'dispatcher',
+    description: 'Coordinador de viajes — gestión de órdenes, viajes y GPS',
     orgId: null,
     isSystem: true,
+    isActive: true,
     permissions: [
-      p('services', READ_WRITE),
-      p('freights', READ_WRITE),
-      p('tracking', READ_ONLY),
-      p('units', READ_ONLY),
-      p('trailers', READ_ONLY),
-      p('drivers', READ_ONLY),
-      p('clients', READ_ONLY),
-      p('locations', READ_ONLY),
-      p('reports', READ_ONLY),
-    ],
-  },
-
-  // ── Mantenimiento ────────────────────────────────────────────────────────
-  {
-    name: 'mantenimiento',
-    description: 'Gestión de mantenimiento, combustible e inventario',
-    orgId: null,
-    isSystem: true,
-    permissions: [
-      p('units', READ_WRITE),
-      p('trailers', READ_WRITE),
-      p('maintenance', READ_WRITE),
-      p('fuel', READ_WRITE),
-      p('inventory', READ_WRITE),
-      p('reports', READ_ONLY),
-    ],
-  },
-
-  // ── Administración ───────────────────────────────────────────────────────
-  {
-    name: 'administracion',
-    description: 'Recursos humanos, nóminas y facturación',
-    orgId: null,
-    isSystem: true,
-    permissions: [
-      p('hr', READ_WRITE),
-      p('payroll', READ_WRITE),
-      p('billing', READ_WRITE),
-      p('reports', READ_ONLY),
-      p('users', READ_ONLY),
-    ],
-  },
-
-  // ── Cliente ──────────────────────────────────────────────────────────────
-  // Solo ve sus propios servicios y fletes — filtro por clientId en queries
-  {
-    name: 'cliente',
-    description: 'Cliente externo — acceso solo a sus propios datos',
-    orgId: null,
-    isSystem: true,
-    permissions: [
-      p('services', READ_ONLY),
-      p('freights', READ_ONLY),
-      p('tracking', READ_ONLY),
+      p('orders',   ['read', 'create', 'update', 'cancel']),
+      p('trips',    ['read', 'create', 'update', 'cancel']),
+      p('fleet',    READ_ONLY),
+      p('tracking', ['read']),
+      p('clients',  READ_ONLY),
+      p('alerts',   ['read', 'resolve']),
+      p('reports',  READ_ONLY),
     ],
   },
 
   // ── Driver ───────────────────────────────────────────────────────────────
-  // Reservado para app móvil — permisos mínimos
   {
     name: 'driver',
-    description: 'Operador — acceso desde app móvil',
+    description: 'Operador / Chofer — sus viajes y GPS propio desde app móvil',
     orgId: null,
     isSystem: true,
+    isActive: true,
     permissions: [
-      p('services', READ_ONLY),
-      p('tracking', ['read', 'write']),  // puede actualizar su ubicación
+      p('trips',    ['read', 'update']),
+      p('tracking', ['read', 'create', 'update']),
+      p('alerts',   ['read']),
+    ],
+  },
+
+  // ── Mechanic ─────────────────────────────────────────────────────────────
+  {
+    name: 'mechanic',
+    description: 'Mecánico — gestión de flotilla y lectura de combustible',
+    orgId: null,
+    isSystem: true,
+    isActive: true,
+    permissions: [
+      p('fleet',    ['read', 'create', 'update']),
+      p('fuel',     READ_ONLY),
+      p('alerts',   ['read', 'resolve']),
+      p('reports',  READ_ONLY),
+    ],
+  },
+
+  // ── Accountant ───────────────────────────────────────────────────────────
+  {
+    name: 'accountant',
+    description: 'Contador — facturación completa y reportes',
+    orgId: null,
+    isSystem: true,
+    isActive: true,
+    permissions: [
+      p('invoices', ALL_ACTIONS),
+      p('reports',  ['read', 'export']),
+      p('clients',  READ_ONLY),
+      p('orders',   READ_ONLY),
+    ],
+  },
+
+  // ── HR ───────────────────────────────────────────────────────────────────
+  {
+    name: 'hr',
+    description: 'Recursos Humanos — empleados y nómina',
+    orgId: null,
+    isSystem: true,
+    isActive: true,
+    permissions: [
+      p('users',   FULL_CRUD),
+      p('payroll', ALL_ACTIONS),
+      p('reports', READ_ONLY),
+    ],
+  },
+
+  // ── Manager ──────────────────────────────────────────────────────────────
+  {
+    name: 'manager',
+    description: 'Gerente — solo lectura de reportes y KPIs',
+    orgId: null,
+    isSystem: true,
+    isActive: true,
+    permissions: [
+      p('orders',   READ_ONLY),
+      p('trips',    READ_ONLY),
+      p('fleet',    READ_ONLY),
+      p('tracking', READ_ONLY),
+      p('invoices', READ_ONLY),
+      p('reports',  ['read', 'export']),
+      p('fuel',     READ_ONLY),
+      p('clients',  READ_ONLY),
+      p('alerts',   READ_ONLY),
+    ],
+  },
+
+  // ── Fuel Manager ─────────────────────────────────────────────────────────
+  {
+    name: 'fuel_manager',
+    description: 'Jefe de Combustible — tanques, despacho y transacciones',
+    orgId: null,
+    isSystem: true,
+    isActive: true,
+    permissions: [
+      p('fuel',    ALL_ACTIONS),
+      p('fleet',   READ_ONLY),
+      p('reports', READ_ONLY),
+      p('alerts',  ['read', 'resolve']),
+    ],
+  },
+
+  // ── Client Viewer ────────────────────────────────────────────────────────
+  {
+    name: 'client_viewer',
+    description: 'Contacto cliente — portal externo, solo sus datos',
+    orgId: null,
+    isSystem: true,
+    isActive: true,
+    permissions: [
+      p('orders',   READ_ONLY),
+      p('tracking', READ_ONLY),
+      p('invoices', ['read', 'export']),
     ],
   },
 ];
 
 // ── Función de seed ───────────────────────────────────────────────────────
-// Usa upsert — si el rol ya existe lo actualiza, si no lo crea
-// Seguro de correr múltiples veces
 
 export async function seedRoles(): Promise<void> {
   const collection = getRoleCollection();
