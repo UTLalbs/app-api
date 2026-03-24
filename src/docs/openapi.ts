@@ -10,8 +10,8 @@ import { userSchemas } from './schemas/user.schema';
 export const openApiDocument = {
   openapi: '3.0.3',
   info: {
-    title: 'UTL API',
-    description: 'Unidos Transport API — Backend modernization',
+    title: 'API',
+    description: 'API — Backend modernization',
     version: '1.0.0',
   },
   servers: [

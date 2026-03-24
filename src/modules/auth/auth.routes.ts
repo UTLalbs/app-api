@@ -1,5 +1,7 @@
 import { Router } from 'express';
 
+import { authenticate } from '../../middleware/authenticate';
+
 import {
   googleLogin,
   googleCallback,
@@ -25,4 +27,4 @@ authRouter.get('/microsoft/callback', microsoftCallback);
 authRouter.post('/refresh', refresh);
 authRouter.post('/logout', logoutHandler);
 authRouter.post('/logout-all', logoutAll);
-authRouter.get('/me', me);
+authRouter.get('/me', authenticate, me);
