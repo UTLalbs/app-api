@@ -5,15 +5,16 @@ import type { Action, Permission, Resource, RoleDocument } from './role.types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-const ALL_ACTIONS: Action[] = ['read', 'create', 'update', 'delete', 'cancel', 'export', 'resolve'];
-const READ_ONLY:   Action[] = ['read'];
-const FULL_CRUD:   Action[] = ['read', 'create', 'update', 'delete'];
+const ALL_ACTIONS:  Action[] = ['read', 'create', 'update', 'delete', 'cancel', 'export', 'resolve'];
+const READ_ONLY:    Action[] = ['read'];
+const READ_WRITE:   Action[] = ['read', 'create', 'update'];
+const FULL_CRUD:    Action[] = ['read', 'create', 'update', 'delete'];
 
 function p(resource: Resource, actions: Action[]): Permission {
   return { resource, actions };
 }
 
-// ── Definición de roles del sistema ───────────────────────────────────────
+// ── Roles del sistema ──────────────────────────────────────────────────────
 
 const SYSTEM_ROLES: Omit<RoleDocument, '_id' | 'createdAt' | 'updatedAt'>[] = [
 
@@ -25,18 +26,27 @@ const SYSTEM_ROLES: Omit<RoleDocument, '_id' | 'createdAt' | 'updatedAt'>[] = [
     isSystem: true,
     isActive: true,
     permissions: [
-      p('users',    ALL_ACTIONS),
-      p('roles',    ALL_ACTIONS),
-      p('orders',   ALL_ACTIONS),
-      p('trips',    ALL_ACTIONS),
-      p('fleet',    ALL_ACTIONS),
-      p('tracking', ALL_ACTIONS),
-      p('invoices', ALL_ACTIONS),
-      p('reports',  ALL_ACTIONS),
-      p('fuel',     ALL_ACTIONS),
-      p('payroll',  ALL_ACTIONS),
-      p('clients',  ALL_ACTIONS),
-      p('alerts',   ALL_ACTIONS),
+      p('control_board',          ALL_ACTIONS),
+      p('services',               ALL_ACTIONS),
+      p('fuel',                   ALL_ACTIONS),
+      p('fuel_inventory',         ALL_ACTIONS),
+      p('fuel_scheduling',        ALL_ACTIONS),
+      p('maintenance',            ALL_ACTIONS),
+      p('maintenance_orders',     ALL_ACTIONS),
+      p('maintenance_inventory',  ALL_ACTIONS),
+      p('billing',                ALL_ACTIONS),
+      p('reports',                ALL_ACTIONS),
+      p('invoices',               ALL_ACTIONS),
+      p('payroll',                ALL_ACTIONS),
+      p('payroll_employees',      ALL_ACTIONS),
+      p('payroll_periods',        ALL_ACTIONS),
+      p('users',                  ALL_ACTIONS),
+      p('units',                  ALL_ACTIONS),
+      p('trailers',               ALL_ACTIONS),
+      p('clients',                ALL_ACTIONS),
+      p('locations',              ALL_ACTIONS),
+      p('tax_entities',           ALL_ACTIONS),
+      p('settings',               ALL_ACTIONS),
     ],
   },
 
@@ -48,94 +58,108 @@ const SYSTEM_ROLES: Omit<RoleDocument, '_id' | 'createdAt' | 'updatedAt'>[] = [
     isSystem: true,
     isActive: true,
     permissions: [
-      p('users',    FULL_CRUD),
-      p('roles',    FULL_CRUD),
-      p('orders',   ALL_ACTIONS),
-      p('trips',    ALL_ACTIONS),
-      p('fleet',    FULL_CRUD),
-      p('tracking', ALL_ACTIONS),
-      p('invoices', ALL_ACTIONS),
-      p('reports',  ['read', 'export']),
-      p('fuel',     FULL_CRUD),
-      p('payroll',  FULL_CRUD),
-      p('clients',  FULL_CRUD),
-      p('alerts',   ALL_ACTIONS),
+      p('control_board',          READ_ONLY),
+      p('services',               ALL_ACTIONS),
+      p('fuel',                   READ_ONLY),
+      p('fuel_inventory',         READ_WRITE),
+      p('fuel_scheduling',        FULL_CRUD),
+      p('maintenance',            READ_ONLY),
+      p('maintenance_orders',     ALL_ACTIONS),
+      p('maintenance_inventory',  READ_WRITE),
+      p('billing',                READ_WRITE),
+      p('reports',                ['read', 'export']),
+      p('invoices',               ALL_ACTIONS),
+      p('payroll',                READ_ONLY),
+      p('payroll_employees',      FULL_CRUD),
+      p('payroll_periods',        FULL_CRUD),
+      p('users',                  FULL_CRUD),
+      p('units',                  FULL_CRUD),
+      p('trailers',               FULL_CRUD),
+      p('clients',                FULL_CRUD),
+      p('locations',              FULL_CRUD),
+      p('tax_entities',           FULL_CRUD),
+      p('settings',               ['read', 'update']),
     ],
   },
 
   // ── Dispatcher ───────────────────────────────────────────────────────────
   {
     name: 'dispatcher',
-    description: 'Coordinador de viajes — gestión de órdenes, viajes y GPS',
+    description: 'Coordinador de viajes — gestión de servicios y tablero',
     orgId: null,
     isSystem: true,
     isActive: true,
     permissions: [
-      p('orders',   ['read', 'create', 'update', 'cancel']),
-      p('trips',    ['read', 'create', 'update', 'cancel']),
-      p('fleet',    READ_ONLY),
-      p('tracking', ['read']),
-      p('clients',  READ_ONLY),
-      p('alerts',   ['read', 'resolve']),
-      p('reports',  READ_ONLY),
+      p('control_board',  READ_ONLY),
+      p('services',       ['read', 'create', 'update', 'cancel']),
+      p('units',          READ_ONLY),
+      p('trailers',       READ_ONLY),
+      p('clients',        READ_ONLY),
+      p('locations',      READ_ONLY),
+      p('reports',        READ_ONLY),
     ],
   },
 
   // ── Driver ───────────────────────────────────────────────────────────────
   {
     name: 'driver',
-    description: 'Operador / Chofer — sus viajes y GPS propio desde app móvil',
+    description: 'Operador / Chofer — sus servicios desde app móvil',
     orgId: null,
     isSystem: true,
     isActive: true,
     permissions: [
-      p('trips',    ['read', 'update']),
-      p('tracking', ['read', 'create', 'update']),
-      p('alerts',   ['read']),
+      p('services',       ['read', 'update']),
+      p('control_board',  READ_ONLY),
     ],
   },
 
   // ── Mechanic ─────────────────────────────────────────────────────────────
   {
     name: 'mechanic',
-    description: 'Mecánico — gestión de flotilla y lectura de combustible',
+    description: 'Mecánico — mantenimiento, inventario y unidades',
     orgId: null,
     isSystem: true,
     isActive: true,
     permissions: [
-      p('fleet',    ['read', 'create', 'update']),
-      p('fuel',     READ_ONLY),
-      p('alerts',   ['read', 'resolve']),
-      p('reports',  READ_ONLY),
+      p('maintenance',            READ_ONLY),
+      p('maintenance_orders',     ['read', 'create', 'update', 'resolve']),
+      p('maintenance_inventory',  READ_WRITE),
+      p('units',                  READ_ONLY),
+      p('trailers',               READ_ONLY),
+      p('fuel',                   READ_ONLY),
+      p('reports',                READ_ONLY),
     ],
   },
 
   // ── Accountant ───────────────────────────────────────────────────────────
   {
     name: 'accountant',
-    description: 'Contador — facturación completa y reportes',
+    description: 'Contador — facturación, facturas y reportes',
     orgId: null,
     isSystem: true,
     isActive: true,
     permissions: [
-      p('invoices', ALL_ACTIONS),
-      p('reports',  ['read', 'export']),
-      p('clients',  READ_ONLY),
-      p('orders',   READ_ONLY),
+      p('billing',      READ_WRITE),
+      p('invoices',     ['read', 'create', 'update', 'cancel']),
+      p('reports',      ['read', 'export']),
+      p('clients',      READ_ONLY),
+      p('tax_entities', READ_ONLY),
     ],
   },
 
   // ── HR ───────────────────────────────────────────────────────────────────
   {
     name: 'hr',
-    description: 'Recursos Humanos — empleados y nómina',
+    description: 'Recursos Humanos — empleados, nóminas y períodos',
     orgId: null,
     isSystem: true,
     isActive: true,
     permissions: [
-      p('users',   FULL_CRUD),
-      p('payroll', ALL_ACTIONS),
-      p('reports', READ_ONLY),
+      p('payroll',          READ_ONLY),
+      p('payroll_employees', FULL_CRUD),
+      p('payroll_periods',  FULL_CRUD),
+      p('users',            READ_ONLY),
+      p('reports',          READ_ONLY),
     ],
   },
 
@@ -147,30 +171,33 @@ const SYSTEM_ROLES: Omit<RoleDocument, '_id' | 'createdAt' | 'updatedAt'>[] = [
     isSystem: true,
     isActive: true,
     permissions: [
-      p('orders',   READ_ONLY),
-      p('trips',    READ_ONLY),
-      p('fleet',    READ_ONLY),
-      p('tracking', READ_ONLY),
-      p('invoices', READ_ONLY),
-      p('reports',  ['read', 'export']),
-      p('fuel',     READ_ONLY),
-      p('clients',  READ_ONLY),
-      p('alerts',   READ_ONLY),
+      p('control_board',          READ_ONLY),
+      p('services',               READ_ONLY),
+      p('fuel',                   READ_ONLY),
+      p('maintenance',            READ_ONLY),
+      p('billing',                READ_ONLY),
+      p('reports',                ['read', 'export']),
+      p('invoices',               READ_ONLY),
+      p('payroll',                READ_ONLY),
+      p('units',                  READ_ONLY),
+      p('trailers',               READ_ONLY),
+      p('clients',                READ_ONLY),
     ],
   },
 
   // ── Fuel Manager ─────────────────────────────────────────────────────────
   {
     name: 'fuel_manager',
-    description: 'Jefe de Combustible — tanques, despacho y transacciones',
+    description: 'Jefe de Combustible — inventario y programación de combustible',
     orgId: null,
     isSystem: true,
     isActive: true,
     permissions: [
-      p('fuel',    ALL_ACTIONS),
-      p('fleet',   READ_ONLY),
-      p('reports', READ_ONLY),
-      p('alerts',  ['read', 'resolve']),
+      p('fuel',             READ_ONLY),
+      p('fuel_inventory',   READ_WRITE),
+      p('fuel_scheduling',  FULL_CRUD),
+      p('units',            READ_ONLY),
+      p('reports',          READ_ONLY),
     ],
   },
 
@@ -182,9 +209,9 @@ const SYSTEM_ROLES: Omit<RoleDocument, '_id' | 'createdAt' | 'updatedAt'>[] = [
     isSystem: true,
     isActive: true,
     permissions: [
-      p('orders',   READ_ONLY),
-      p('tracking', READ_ONLY),
-      p('invoices', ['read', 'export']),
+      p('services',   READ_ONLY),
+      p('invoices',   ['read', 'export']),
+      p('reports',    READ_ONLY),
     ],
   },
 ];

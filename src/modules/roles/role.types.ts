@@ -12,18 +12,34 @@ export type Action =
   | 'resolve';
 
 export type Resource =
-  | 'users'
-  | 'roles'
-  | 'orders'
-  | 'trips'
-  | 'fleet'
-  | 'tracking'
-  | 'invoices'
-  | 'reports'
+  // Operaciones
+  | 'control_board'
+  | 'services'
+  // Combustible
   | 'fuel'
+  | 'fuel_inventory'
+  | 'fuel_scheduling'
+  // Mantenimiento
+  | 'maintenance'
+  | 'maintenance_orders'
+  | 'maintenance_inventory'
+  // Administración
+  | 'billing'
+  | 'reports'
+  | 'invoices'
+  // Nóminas
   | 'payroll'
+  | 'payroll_employees'
+  | 'payroll_periods'
+  // Catálogos
+  | 'users'
+  | 'units'
+  | 'trailers'
   | 'clients'
-  | 'alerts';
+  | 'locations'
+  | 'tax_entities'
+  // Ajustes
+  | 'settings';
 
 // ── Subdocumentos ──────────────────────────────────────────────────────────
 
