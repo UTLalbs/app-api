@@ -30,7 +30,7 @@ import {
 // TTL para state y codeVerifier en Redis (10 minutos)
 const PKCE_TTL = 60 * 10;
 
-// ── Helpers para guardar/recuperar PKCE en Redis ───────────────────────────
+// ── Helpers PKCE ───────────────────────────────────────────────────────────
 
 async function savePKCE(
 	state: string,
@@ -57,15 +57,33 @@ async function deletePKCE(state: string): Promise<void> {
 	await getRedisClient().del(`auth:pkce:${state}`);
 }
 
+// ── Helper redirect ────────────────────────────────────────────────────────
+
+function getFrontendUrl(): string {
+	return process.env.FRONTEND_URL ?? "http://localhost:3001";
+}
+
+function getRedirectUrl(userType: string, isNewUser: boolean): string {
+	// super_admin siempre va al panel de administración
+	if (userType === "super_admin") {
+		return `${getFrontendUrl()}/admin`;
+	}
+
+	// usuarios nuevos van al onboarding
+	if (isNewUser) {
+		return `${getFrontendUrl()}/onboarding`;
+	}
+
+	// usuarios existentes van al dashboard
+	return `${getFrontendUrl()}/dashboard`;
+}
+
 // ── Google ─────────────────────────────────────────────────────────────────
 
-// GET /api/v1/auth/google
-// Redirige al usuario a Google para autenticarse
 export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
 	const state = generateState();
 	const codeVerifier = generateCodeVerifier();
 
-	// Guardar PKCE en Redis — se verifica en el callback
 	await savePKCE(state, codeVerifier, "google");
 
 	const authUrl = getGoogleAuthorizationUrl(state, codeVerifier);
@@ -74,61 +92,48 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response) => {
 	res.redirect(authUrl);
 });
 
-// GET /api/v1/auth/google/callback
-// Google redirige aquí con el authorization code
 export const googleCallback = asyncHandler(
 	async (req: Request, res: Response) => {
 		const {state} = req.query as {state: string};
 
 		if (!state) throw new AuthError("Missing state parameter");
 
-		// Recuperar PKCE de Redis
 		const pkce = await getPKCE(state);
 		if (!pkce)
 			throw new AuthError("Invalid or expired state — please try again");
 
-		// Limpiar PKCE inmediatamente — solo se usa una vez
 		await deletePKCE(state);
 
-		// Construir URL completa del callback para openid-client
 		const currentUrl = `${req.protocol}://${req.get("host")}${req.originalUrl}`;
 
-		// Procesar callback con Google
 		const profile = await handleGoogleCallback(
 			currentUrl,
 			state,
 			pkce.codeVerifier,
 		);
 
-		// Obtener orgId — en producción viene del subdominio o de la sesión
-		// Buscar orgId por email del perfil
-		const {findUserByEmail} = await import("../users/user.repository");
-		const existingUser = await findUserByEmail(profile.email);
-		const orgId = existingUser?.orgId ?? (req.query.orgId as string);
-		if (!orgId)
-			throw new AuthError("User not found — contact your administrator");
+		// orgId es opcional — super_admin no necesita uno
+		const orgId =
+			(req.query.orgId as string | undefined) ??
+			(req.cookies?.pending_org_id as string | undefined);
 
-		// Login / registro / identity linking
 		const {user, tokens, isNewUser} = await loginWithOIDC(profile, orgId);
 
-		// Setear cookies HttpOnly
 		res
 			.cookie("access_token", tokens.accessToken, accessTokenCookieOptions)
 			.cookie("refresh_token", tokens.refreshToken, refreshTokenCookieOptions);
 
-		logger.info({userId: user.id, isNewUser}, "Google login successful");
-
-		// Redirigir al frontend
-		const redirectUrl = isNewUser ? "/onboarding" : "/dashboard";
-		res.redirect(
-			`${process.env.FRONTEND_URL ?? "http://localhost:5173"}${redirectUrl}`,
+		logger.info(
+			{userId: user.id, isNewUser, userType: user.userType},
+			"Google login successful",
 		);
+
+		res.redirect(getRedirectUrl(user.userType, isNewUser));
 	},
 );
 
 // ── Microsoft ──────────────────────────────────────────────────────────────
 
-// GET /api/v1/auth/microsoft
 export const microsoftLogin = asyncHandler(
 	async (req: Request, res: Response) => {
 		const state = generateState();
@@ -143,7 +148,6 @@ export const microsoftLogin = asyncHandler(
 	},
 );
 
-// GET /api/v1/auth/microsoft/callback
 export const microsoftCallback = asyncHandler(
 	async (req: Request, res: Response) => {
 		const {state} = req.query as {state: string};
@@ -163,12 +167,10 @@ export const microsoftCallback = asyncHandler(
 			state,
 			pkce.codeVerifier,
 		);
-		// Buscar orgId por email del perfil
-		const {findUserByEmail} = await import("../users/user.repository");
-		const existingUser = await findUserByEmail(profile.email);
-		const orgId = existingUser?.orgId ?? (req.query.orgId as string);
-		if (!orgId)
-			throw new AuthError("User not found — contact your administrator");
+
+		const orgId =
+			(req.query.orgId as string | undefined) ??
+			(req.cookies?.pending_org_id as string | undefined);
 
 		const {user, tokens, isNewUser} = await loginWithOIDC(profile, orgId);
 
@@ -176,18 +178,17 @@ export const microsoftCallback = asyncHandler(
 			.cookie("access_token", tokens.accessToken, accessTokenCookieOptions)
 			.cookie("refresh_token", tokens.refreshToken, refreshTokenCookieOptions);
 
-		logger.info({userId: user.id, isNewUser}, "Microsoft login successful");
-
-		const redirectUrl = isNewUser ? "/onboarding" : "/dashboard";
-		res.redirect(
-			`${process.env.FRONTEND_URL ?? "http://localhost:5173"}${redirectUrl}`,
+		logger.info(
+			{userId: user.id, isNewUser, userType: user.userType},
+			"Microsoft login successful",
 		);
+
+		res.redirect(getRedirectUrl(user.userType, isNewUser));
 	},
 );
 
-// ── Refresh token ──────────────────────────────────────────────────────────
+// ── Refresh ────────────────────────────────────────────────────────────────
 
-// POST /api/v1/auth/refresh
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
 	const refreshToken = req.cookies?.refresh_token as string | undefined;
 
@@ -203,7 +204,6 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 
 // ── Logout ─────────────────────────────────────────────────────────────────
 
-// POST /api/v1/auth/logout
 export const logoutHandler = asyncHandler(
 	async (req: Request, res: Response) => {
 		const refreshToken = req.cookies?.refresh_token as string | undefined;
@@ -213,12 +213,10 @@ export const logoutHandler = asyncHandler(
 				const payload = await verifyRefreshToken(refreshToken);
 				await logout(payload.sub, payload.jti);
 			} catch {
-				// Si el token ya expiró o es inválido, ignoramos el error
-				// igual limpiamos las cookies
+				// token ya expirado — igual limpiamos cookies
 			}
 		}
 
-		// Limpiar cookies
 		res
 			.clearCookie("access_token")
 			.clearCookie("refresh_token")
@@ -226,7 +224,6 @@ export const logoutHandler = asyncHandler(
 	},
 );
 
-// POST /api/v1/auth/logout-all
 export const logoutAll = asyncHandler(async (req: Request, res: Response) => {
 	if (!req.user) throw new AuthError("Not authenticated");
 
@@ -238,8 +235,8 @@ export const logoutAll = asyncHandler(async (req: Request, res: Response) => {
 		.json({success: true});
 });
 
-// GET /api/v1/auth/me
-// Retorna el usuario autenticado actual
+// ── Me ─────────────────────────────────────────────────────────────────────
+
 export const me = asyncHandler(async (req: Request, res: Response) => {
 	if (!req.user) throw new AuthError("Not authenticated");
 

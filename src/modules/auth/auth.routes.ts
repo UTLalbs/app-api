@@ -12,6 +12,11 @@ import {
   logoutAll,
   me,
 } from './auth.controller';
+import {
+  startImpersonation,
+  exitImpersonation,
+} from './impersonate.controller';
+
 
 export const authRouter = Router();
 
@@ -27,4 +32,8 @@ authRouter.get('/microsoft/callback', microsoftCallback);
 authRouter.post('/refresh', refresh);
 authRouter.post('/logout', logoutHandler);
 authRouter.post('/logout-all', logoutAll);
-authRouter.get('/me', authenticate, me);
+authRouter.get( '/me', authenticate, me );
+
+// ── Impersonation (solo super_admin) ───────────────────────────────────────
+authRouter.post('/impersonate/exit', authenticate, exitImpersonation);
+authRouter.post('/impersonate/:orgId', authenticate, startImpersonation);

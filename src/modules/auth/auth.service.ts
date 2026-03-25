@@ -1,158 +1,154 @@
-import {logger} from "../../config/logger";
-import {AuthError, ForbiddenError} from "../../shared/errors/AppError";
-import {createAuditEvent} from "../audit/audit.service";
+import { logger } from '../../config/logger';
+import { AuthError, ForbiddenError } from '../../shared/errors/AppError';
+import { createAuditEvent } from '../audit/audit.service';
 import {
-	findUserByEmail,
-	findUserByIdentity,
-	createUser,
-	linkUserIdentity,
-	updateUserLastLogin,
-} from "../users/user.repository";
-import type {User} from "../users/user.types";
+  findUserByEmail,
+  findUserByIdentity,
+  createUser,
+  linkUserIdentity,
+  updateUserLastLogin,
+} from '../users/user.repository';
+import type { User } from '../users/user.types';
 
-import type {OIDCProfile, TokenPair} from "./auth.types";
-import {issueTokenPair} from "./token.service";
+import type { OIDCProfile, TokenPair } from './auth.types';
+import { issueTokenPair } from './token.service';
 
 export interface LoginResult {
-	user: User;
-	tokens: TokenPair;
-	isNewUser: boolean;
+  user: User;
+  tokens: TokenPair;
+  isNewUser: boolean;
 }
 
 // ── Flujo principal de login SSO ───────────────────────────────────────────
-// Llamado después de que Google o Microsoft validan al usuario
-// y nos entregan el perfil OIDC verificado
 
 export async function loginWithOIDC(
-	profile: OIDCProfile,
-	orgId: string,
+  profile: OIDCProfile,
+  orgId?: string,
 ): Promise<LoginResult> {
-	// Regla 1: el email debe estar verificado por el provider
-	if (!profile.emailVerified) {
-		throw new AuthError("Email not verified by identity provider");
-	}
+  // Regla 1: email debe estar verificado
+  if (!profile.emailVerified) {
+    throw new AuthError('Email not verified by identity provider');
+  }
 
-	const providerField = profile.provider === "google" ? "google" : "microsoft";
+  const providerField = profile.provider === 'google' ? 'google' : 'microsoft';
 
-	// Regla 2: buscar si ya existe un usuario con este subjectId
-	let user = await findUserByIdentity(providerField, profile.subjectId);
-	let isNewUser = false;
+  // Regla 2: buscar por subjectId
+  let user = await findUserByIdentity(providerField, profile.subjectId);
+  let isNewUser = false;
 
-	if (!user) {
-		// Regla 3: buscar por email para hacer identity linking
-		const existingUser = await findUserByEmail(profile.email);
+  if (!user) {
+    const existingUser = await findUserByEmail(profile.email);
 
-		if (existingUser) {
-			// Regla 4: el usuario existe con otro provider — vincular identidad
-			logger.info(
-				{userId: existingUser.id, provider: profile.provider},
-				"Linking new identity to existing user",
-			);
+    if (existingUser) {
+      // Regla 3: identity linking
+      logger.info(
+        { userId: existingUser.id, provider: profile.provider },
+        'Linking new identity to existing user',
+      );
 
-			user = await linkUserIdentity(
-				existingUser.id,
-				providerField,
-				profile.subjectId,
-				profile.email,
-			);
-		} else {
-			// Regla 5: usuario completamente nuevo — crear cuenta
-			logger.info(
-				{email: profile.email, provider: profile.provider},
-				"Creating new user from OIDC profile",
-			);
+      user = await linkUserIdentity(
+        existingUser.id,
+        providerField,
+        profile.subjectId,
+        profile.email,
+      );
+    } else {
+      // Regla 4: usuario nuevo
+      // super_admin no necesita orgId
+      // usuarios normales sí lo requieren
+      if (!orgId) {
+        // Verificar si es el primer super_admin del sistema
+        // En producción esto se controla con un flag en .env
+        throw new AuthError(
+          'Organization not specified — please contact your administrator',
+        );
+      }
 
-			user = await createUser({
-				email: profile.email,
-				displayName: profile.displayName,
-				orgId,
-				identities: {
-					local: null,
-					google:
-						profile.provider === "google"
-							? {
-									sub: profile.subjectId,
-									email: profile.email,
-									connectedAt: new Date(),
-								}
-							: null,
-					microsoft:
-						profile.provider === "microsoft"
-							? {
-									sub: profile.subjectId,
-									email: profile.email,
-									connectedAt: new Date(),
-								}
-							: null,
-				},
-			});
+      logger.info(
+        { email: profile.email, provider: profile.provider },
+        'Creating new user from OIDC profile',
+      );
 
-			isNewUser = true;
-		}
-	}
+      user = await createUser({
+        email: profile.email,
+        displayName: profile.displayName,
+        orgId,
+        identities: {
+          local: null,
+          google: profile.provider === 'google'
+            ? { sub: profile.subjectId, email: profile.email, connectedAt: new Date() }
+            : null,
+          microsoft: profile.provider === 'microsoft'
+            ? { sub: profile.subjectId, email: profile.email, connectedAt: new Date() }
+            : null,
+        },
+      });
 
-	// Regla 6: cuenta deshabilitada no puede autenticarse
-	if (user.status === "inactive") {
-		logger.warn({userId: user.id}, "Disabled user attempted login");
-		throw new ForbiddenError("Account is disabled");
-	}
+      isNewUser = true;
+    }
+  }
 
-	// Regla 7: cuenta pendiente puede autenticarse pero el frontend
-	// debe redirigirla al onboarding
-	if (user.status === "pending") {
-		logger.info({userId: user.id}, "Pending user logged in");
-	}
+  // Regla 5: cuenta deshabilitada
+  if (user.status === 'inactive' || user.status === 'suspended') {
+    logger.warn({ userId: user.id }, 'Disabled user attempted login');
+    throw new ForbiddenError('Account is disabled');
+  }
 
-	// Registrar último login — fire and forget, no bloquea el response
-	updateUserLastLogin(user.id).catch((err) =>
-		logger.error({err, userId: user.id}, "Failed to update lastLoginAt"),
-	);
+  // Regla 6: cuenta pendiente puede autenticarse
+  if (user.status === 'pending') {
+    logger.info({ userId: user.id }, 'Pending user logged in');
+  }
 
-	// Emitir tokens
-	const tokens = await issueTokenPair(user);
+  // Fire and forget
+  updateUserLastLogin(user.id).catch((err) =>
+    logger.error({ err, userId: user.id }, 'Failed to update lastLoginAt'),
+  );
 
-	await createAuditEvent({
-		category: "auth",
-		action: "login_success",
-		actor: {
-			id: user.id,
-			email: user.email,
-			displayName: user.displayName,
-		},
-		orgId: user.orgId,
-		metadata: {
-			provider: profile.provider,
-			isNewUser,
-		},
-	});
+  const tokens = await issueTokenPair(user);
 
-	logger.info(
-		{userId: user.id, provider: profile.provider, isNewUser},
-		"User logged in successfully",
-	);
+  await createAuditEvent({
+    category: 'auth',
+    action: 'login_success',
+    actor: {
+      id: user.id,
+      email: user.email,
+      displayName: user.displayName,
+    },
+    orgId: user.orgId ?? undefined,
+    metadata: {
+      provider: profile.provider,
+      isNewUser,
+      userType: user.userType,
+    },
+  });
 
-	return {user, tokens, isNewUser};
+  logger.info(
+    { userId: user.id, provider: profile.provider, isNewUser, userType: user.userType },
+    'User logged in successfully',
+  );
+
+  return { user, tokens, isNewUser };
 }
 
-// ── Refresh token ──────────────────────────────────────────────────────────
+// ── Refresh session ────────────────────────────────────────────────────────
+
 export async function refreshSession(refreshToken: string): Promise<TokenPair> {
-  const { verifyRefreshToken, issueTokenPair: reissue } = await import('./token.service');
+  const { verifyRefreshToken, issueTokenPair: reissue, revokeRefreshToken } =
+    await import('./token.service');
   const { findUserById } = await import('../users/user.repository');
 
-  // Verificar que el refresh token existe en MongoDB y no ha sido usado
   const payload = await verifyRefreshToken(refreshToken);
 
-  // Revocar el token actual — rotación
-  const { revokeRefreshToken } = await import('./token.service');
   await revokeRefreshToken(payload.sub, payload.jti);
 
-  // Obtener usuario actualizado
   const user = await findUserById(payload.sub, '');
 
   if (!user) throw new AuthError('User not found');
-  if (user.status === 'inactive') throw new ForbiddenError('Account is disabled');
 
-  // Emitir nuevo par de tokens
+  if (user.status === 'inactive' || user.status === 'suspended') {
+    throw new ForbiddenError('Account is disabled');
+  }
+
   const tokens = await reissue(user);
 
   logger.info({ userId: user.id }, 'Session refreshed');
