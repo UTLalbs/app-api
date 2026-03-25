@@ -216,6 +216,6 @@ export interface UpdateUserDto {
   roles?: UserRoleDto[];
   clientId?: string | null;
   preferences?: Partial<UserPreferences>;
-  employeeProfile?: Partial<EmployeeProfile> | null;
+  employeeProfile?: EmployeeProfile | null;
   clientMemberships?: ClientMembership[] | null;
 }
