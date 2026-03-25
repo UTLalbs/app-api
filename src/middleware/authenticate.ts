@@ -59,13 +59,12 @@ export async function authenticate(
 			id: user.id,
 			email: user.email,
 			displayName: user.displayName,
-			orgId: payload.impersonating?.orgId ?? user.orgId ?? null, // ← orgId de la org impersonada
+			orgId: payload.impersonating?.orgId ?? user.orgId ?? null,
 			userType: user.userType,
 			roles: user.roles,
-			impersonating: payload.impersonating ?? null, 
+			impersonating: payload.impersonating ?? null,
 			resolvedPermissions: {},
 		};
-
 		// ── Guardar en cache Redis ─────────────────────────────────────────────
 		await getRedisClient().set(
 			cacheKey,
