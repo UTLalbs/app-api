@@ -32,6 +32,28 @@ export async function authenticate(
 		// ── Verificar JWT ──────────────────────────────────────────────────────
 		const payload = verifyAccessToken(token);
 
+		// Si hay impersonation activa — NO usar cache, leer siempre del JWT
+		// para que el exit surta efecto inmediatamente
+		if (payload.impersonating) {
+			const user = await findUserById(payload.sub, "");
+			if (!user) throw new AuthError("User not found");
+			if (user.status === "inactive")
+				throw new AuthError("Account is disabled");
+
+			req.user = {
+				id: user.id,
+				email: user.email,
+				displayName: user.displayName,
+				orgId: payload.impersonating.orgId,
+				userType: user.userType,
+				roles: user.roles,
+				impersonating: payload.impersonating,
+				resolvedPermissions: {},
+			};
+			req.orgId = payload.impersonating.orgId;
+			return next();
+		}
+
 		// ── Buscar usuario en cache Redis ──────────────────────────────────────
 		// Evita ir a MongoDB en cada request
 		const cacheKey = userCacheKey(payload.sub);

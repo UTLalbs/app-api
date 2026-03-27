@@ -101,7 +101,13 @@ export const exitImpersonation = asyncHandler(
 
     // Obtener usuario actualizado
     const user = await findUserById(req.user.id, '');
-    if (!user) throw new AuthError('User not found');
+    if ( !user ) throw new AuthError( 'User not found' );
+    
+    // Invalidar cache para que el próximo request lea el JWT fresco
+    const { invalidatePermissionsCache } = await import('../../middleware/authorize');
+    const { getRedisClient } = await import('../../config/redis');
+    await getRedisClient().del(`auth:user:${req.user.id}`);
+    await invalidatePermissionsCache(req.user.id);
 
     // Emitir access_token limpio — sin impersonating
     const accessToken = issueAccessToken(user, null);
