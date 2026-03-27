@@ -20,7 +20,7 @@ function toOrganization(doc: OrganizationDocument): Organization {
 		status: doc.status,
 		settings: doc.settings,
 		fiscalData: doc.fiscalData ?? null,
-		contact: doc.contact ?? null,
+		contacts: doc.contacts ?? [],
 		createdAt: doc.createdAt,
 		updatedAt: doc.updatedAt,
 	};
@@ -70,7 +70,7 @@ export async function createOrganization(
 		slug: dto.slug.toLowerCase().trim(),
 		status: "active", // Valor por defecto al crear una organización
 		fiscalData: dto.fiscalData ?? null,
-		contact: dto.contact ?? null,
+		contacts: dto.contacts ?? [],
 		settings: {
 			timezone: "America/Mexico_City",
 			distanceUnit: "km",
@@ -134,6 +134,7 @@ export async function updateOrganization(
 		setFields["settings.maxUsers"] = dto.settings.maxUsers;
 	}
 	if (dto.fiscalData !== undefined) setFields.fiscalData = dto.fiscalData;
+	if (dto.contacts !== undefined) setFields.contacts = dto.contacts;
 
 	const result = await getOrganizationCollection().findOneAndUpdate(
 		{_id: new ObjectId(id), deletedAt: null},

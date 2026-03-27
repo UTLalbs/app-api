@@ -74,7 +74,7 @@ export const createOrganizationSchema = z.object({
 			.optional(),
 		settings: settingsSchema.partial().optional(),
 		fiscalData: fiscalDataSchema.optional().nullable(),
-		contact: contactSchema.optional().nullable(),
+		contacts: z.array(contactSchema).optional().default([]),
 	}),
 });
 

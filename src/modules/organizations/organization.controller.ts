@@ -34,6 +34,8 @@ export const createOrganization = asyncHandler(
       name: req.body.name,
       slug: req.body.slug,
       settings: req.body.settings,
+      fiscalData: req.body.fiscalData,
+      contacts: req.body.contacts,
     });
     res.status(201).json({ success: true, data: org });
   },

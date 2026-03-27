@@ -59,7 +59,7 @@ export interface OrganizationDocument {
 	status: OrganizationStatus;
 	settings: OrganizationSettings;
   fiscalData: OrganizationFiscalData | null;
-  contact: OrgContact | null;
+  contacts: OrgContact[];
 	createdAt: Date;
 	updatedAt: Date;
 	deletedAt: Date | null;
@@ -74,7 +74,7 @@ export interface Organization {
 	status: OrganizationStatus;
 	settings: OrganizationSettings;
   fiscalData: OrganizationFiscalData | null;
-  contact: OrgContact | null;
+  contacts: OrgContact[];
 	createdAt: Date;
 	updatedAt: Date;
 }
@@ -90,7 +90,7 @@ export interface CreateOrganizationDto {
 	slug?: string;
 	settings?: Partial<OrganizationSettings>;
 	fiscalData?: OrganizationFiscalData | null;
-	contact?: OrgContact | null;
+	contacts?: OrgContact[] | null;
 }
 
 export interface UpdateOrganizationDto {
@@ -98,5 +98,5 @@ export interface UpdateOrganizationDto {
 	status?: OrganizationStatus;
 	settings?: Partial<OrganizationSettings>;
 	fiscalData?: OrganizationFiscalData | null;
-	contact?: OrgContact | null;
+	contacts?: OrgContact[] | null;
 }
