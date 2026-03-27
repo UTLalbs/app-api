@@ -48,17 +48,18 @@ const fiscalDataSchema = z.object({
 		name: z.string().min(1),
 	}),
 	address: addressSchema.nullable().optional(),
-} );
+});
 
 const contactSchema = z.object({
-  name:      z.string().min(1).max(100),
-  title:     z.string().min(1).max(100),
-  phoneCode: z.enum(['+52', '+1']).default('+52'),
-  phone:     z.string()
-               .regex(/^\d{10}$/, 'El teléfono debe tener 10 dígitos numéricos')
-               .optional()
-               .or(z.literal('')),
-  email:     z.string().email('Formato de email inválido'),
+	name: z.string().min(1).max(100),
+	title: z.string().min(1).max(100),
+	phoneCode: z.enum(["+52", "+1"]).default("+52"),
+	phone: z
+		.string()
+		.regex(/^\d{10}$/, "El teléfono debe tener 10 dígitos numéricos")
+		.optional()
+		.or(z.literal("")),
+	email: z.string().email("Formato de email inválido"),
 });
 
 // ── Schemas de validación ──────────────────────────────────────────────────
@@ -72,7 +73,8 @@ export const createOrganizationSchema = z.object({
 			.max(100)
 			.regex(/^[a-z0-9-]+$/, "Solo minúsculas, números y guiones")
 			.optional(),
-		settings: settingsSchema.partial().optional(),
+
+		status: z.enum(["active", "trial", "suspended", "cancelled"]).optional(),
 		fiscalData: fiscalDataSchema.optional().nullable(),
 		contacts: z.array(contactSchema).optional().default([]),
 	}),
@@ -82,7 +84,7 @@ export const updateOrganizationSchema = z.object({
 	params: z.object({id: z.string().length(24)}),
 	body: z.object({
 		name: z.string().min(2).max(100).optional(),
-		status: z.enum(["active", "suspended", "cancelled"]).optional(),
+		status: z.enum(["active", "trial", "suspended", "cancelled"]).optional(),
 		settings: settingsSchema.partial().optional(),
 		fiscalData: fiscalDataSchema.optional().nullable(),
 		contact: contactSchema.optional().nullable(),

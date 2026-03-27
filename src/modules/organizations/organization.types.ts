@@ -81,7 +81,7 @@ export interface Organization {
 
 // ── Enums ──────────────────────────────────────────────────────────────────
 
-export type OrganizationStatus = "active" | "suspended" | "cancelled";
+export type OrganizationStatus = 'active' | 'trial' | 'suspended' | 'cancelled';
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
 
