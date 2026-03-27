@@ -16,11 +16,14 @@ import {requestId} from "./middleware/requestId";
 import {authRouter} from "./modules/auth/auth.routes";
 import {organizationRouter} from "./modules/organizations/organization.routes";
 import {roleRouter} from "./modules/roles/role.routes";
-import { taxRouter } from './modules/tax/tax.routes';
-import { userRouter } from "./modules/users/user.routes";
+import {taxRouter} from "./modules/tax/tax.routes";
+import {userRouter} from "./modules/users/user.routes";
 
 export function createApp(): express.Application {
 	const app = express();
+
+	// Deshabilitar ETag — API puro, sin assets estáticos
+	app.set("etag", false);
 
 	// ── Seguridad ──────────────────────────────────────────────────────────────
 	app.use(helmet());
@@ -88,8 +91,8 @@ export function createApp(): express.Application {
 	app.use("/api/v1/auth", authRouter);
 	app.use("/api/v1/organizations", organizationRouter);
 	app.use("/api/v1/roles", apiLimiter, roleRouter);
-	app.use( "/api/v1/users", userRouter );
-	app.use('/api/v1/tax', apiLimiter, taxRouter);
+	app.use("/api/v1/users", userRouter);
+	app.use("/api/v1/tax", apiLimiter, taxRouter);
 
 	// ── Swagger UI ────────────────────────────────────────────────────────────
 	// Solo disponible en development y staging, nunca en production
