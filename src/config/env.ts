@@ -1,12 +1,34 @@
-import 'dotenv/config';
+import * as path from 'path';
 
+import * as dotenv from 'dotenv';
 import { z } from 'zod';
+
+// ── Cargar archivo .env según NODE_ENV ─────────────────────────────────────
+// .env                →  development (default)
+// .env.staging        →  staging
+// .env.production     →  production
+
+const nodeEnv = process.env.NODE_ENV ?? 'development';
+
+const envFile = nodeEnv === 'production'
+  ? '.env.production'
+  : nodeEnv === 'staging'
+    ? '.env.staging'
+    : '.env';
+
+dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+
+// ── Schema de validación ───────────────────────────────────────────────────
 
 const envSchema = z.object({
   // App
-  NODE_ENV: z.enum(['development', 'staging', 'production']).default('development'),
+  NODE_ENV: z
+    .enum(['development', 'staging', 'production'])
+    .default('development'),
   PORT: z.coerce.number().default(3000),
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+    .default('info'),
 
   // Database
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
@@ -32,12 +54,19 @@ const envSchema = z.object({
 
   // CORS
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),
+  FRONTEND_URL: z.string().url().default('http://localhost:3001'),
 
   // Rate limiting
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
   RATE_LIMIT_MAX_AUTH: z.coerce.number().default(10),
   RATE_LIMIT_MAX_API: z.coerce.number().default(100),
+
+  // FacturoPorTi / Tax service
+  FACTUROPORTI_BASE_URL: z.string().url(),
+  FACTUROPORTI_TOKEN: z.string().min(1),
 });
+
+// ── Validar ────────────────────────────────────────────────────────────────
 
 const parsed = envSchema.safeParse(process.env);
 

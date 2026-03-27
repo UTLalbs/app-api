@@ -3,7 +3,9 @@
 	"version": "1.0.0",
 	"main": "index.js",
 	"scripts": {
-		"dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+		"dev": "NODE_ENV=development ts-node-dev --respawn --transpile-only src/server.ts",
+		"dev:staging": "NODE_ENV=staging ts-node-dev --respawn --transpile-only src/server.ts",
+		"dev:production": "NODE_ENV=production ts-node-dev --respawn --transpile-only src/server.ts",
 		"dev:debug": "ts-node-dev --respawn --transpile-only --inspect=0.0.0.0:9229 src/server.ts",
 		"build": "tsc",
 		"start": "node dist/server.js",
@@ -18,7 +20,7 @@
 		"test:coverage": "jest --coverage",
 		"test:unit": "jest --testPathPattern=unit",
 		"test:integration": "jest --testPathPattern=integration",
-		"docker:up": "docker compose up -d",
+		"docker:up": "docker compose up -d mongodb redis",
 		"docker:down": "docker compose down",
 		"docker:logs": "docker compose logs -f"
 	},
@@ -49,6 +51,7 @@
 		"typescript": "^5.9.3"
 	},
 	"dependencies": {
+		"axios": "^1.13.6",
 		"bcrypt": "^6.0.0",
 		"cookie-parser": "^1.4.7",
 		"cors": "^2.8.6",

@@ -3,12 +3,11 @@ import {z} from "zod";
 // ── Subdocumentos ──────────────────────────────────────────────────────────
 
 const featuresSchema = z.object({
-	gps: z.boolean().default(false),
-	invoicing: z.boolean().default(false),
-	cartaPorte: z.boolean().default(false),
-	fuelControl: z.boolean().default(false),
+	operations: z.boolean().default(true),
+	fuel: z.boolean().default(false),
+	maintenance: z.boolean().default(false),
+	administration: z.boolean().default(false),
 	payroll: z.boolean().default(false),
-	vectorSearch: z.boolean().default(false),
 });
 
 const settingsSchema = z.object({
@@ -19,13 +18,26 @@ const settingsSchema = z.object({
 	maxUsers: z.coerce.number().min(1).default(10),
 	allowedEmailDomains: z.array(z.string()).default([]),
 	features: featuresSchema.default({
-		gps: false,
-		invoicing: false,
-		cartaPorte: false,
-		fuelControl: false,
+		operations: true,
+		fuel: false,
+		maintenance: false,
+		administration: false,
 		payroll: false,
-		vectorSearch: false,
 	}),
+});
+
+const addressSchema = z.object({
+	street: z.string().default(""),
+	numExt: z.string().default(""),
+	numInt: z.string().default(""),
+	city: z.object({name: z.string(), code: z.string()}),
+	state: z.object({name: z.string(), code: z.string()}),
+	town: z.object({name: z.string(), code: z.string()}),
+	suburb: z.object({name: z.string(), code: z.string()}),
+	location: z.object({name: z.string(), code: z.string()}),
+	country: z.object({name: z.string(), code: z.string()}),
+	cp: z.string().min(4).max(10),
+	reference: z.string().optional(),
 });
 
 const fiscalDataSchema = z.object({
@@ -35,6 +47,18 @@ const fiscalDataSchema = z.object({
 		code: z.string().min(1),
 		name: z.string().min(1),
 	}),
+	address: addressSchema.nullable().optional(),
+} );
+
+const contactSchema = z.object({
+  name:      z.string().min(1).max(100),
+  title:     z.string().min(1).max(100),
+  phoneCode: z.enum(['+52', '+1']).default('+52'),
+  phone:     z.string()
+               .regex(/^\d{10}$/, 'El teléfono debe tener 10 dígitos numéricos')
+               .optional()
+               .or(z.literal('')),
+  email:     z.string().email('Formato de email inválido'),
 });
 
 // ── Schemas de validación ──────────────────────────────────────────────────
@@ -50,6 +74,7 @@ export const createOrganizationSchema = z.object({
 			.optional(),
 		settings: settingsSchema.partial().optional(),
 		fiscalData: fiscalDataSchema.optional().nullable(),
+		contact: contactSchema.optional().nullable(),
 	}),
 });
 
@@ -60,6 +85,7 @@ export const updateOrganizationSchema = z.object({
 		status: z.enum(["active", "suspended", "cancelled"]).optional(),
 		settings: settingsSchema.partial().optional(),
 		fiscalData: fiscalDataSchema.optional().nullable(),
+		contact: contactSchema.optional().nullable(),
 	}),
 });
 

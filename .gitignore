@@ -6,3 +6,5 @@ dist/
 coverage/
 .nyc_output/
 .env.test
+.env.production
+.env.staging
