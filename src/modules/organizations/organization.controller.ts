@@ -47,6 +47,8 @@ export const updateOrganization = asyncHandler(
       name: req.body.name,
       status: req.body.status,
       settings: req.body.settings,
+      fiscalData: req.body.fiscalData,
+      contacts: req.body.contacts,
     });
     res.json({ success: true, data: org });
   },
