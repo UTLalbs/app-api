@@ -5,11 +5,19 @@ import type { ObjectId } from 'mongodb';
 export type UserStatus = 'pending' | 'active' | 'inactive' | 'suspended';
 export type UserType = 'internal' | 'client_contact' | 'super_admin';
 
+// ── Subdocumentos — Teléfonos ──────────────────────────────────────────────
+
+export interface PhoneEntry {
+  code:   '+52' | '+1';
+  number: string;
+  type:   'personal' | 'office';
+}
+
 // ── Subdocumentos — Roles ──────────────────────────────────────────────────
 
 export interface UserRole {
   roleId: ObjectId;
-  name: string;   // snapshot del nombre para UI — no usar para auth
+  name: string;
 }
 
 export interface UserRoleDto {
@@ -21,7 +29,7 @@ export interface UserRoleDto {
 
 export interface LocalIdentity {
   passwordHash: string | null;
-  passwordHistory: string[];   // últimos 5 hashes
+  passwordHistory: string[];
   mfaEnabled: boolean;
   mfaSecret: string | null;
 }
@@ -61,75 +69,104 @@ export interface TermsAgreement {
 export interface Address {
   street: string;
   numExt: string;
-  numInt: string | null;
-  suburb: { code: string; name: string };
-  city:   { code: string; name: string };
-  state:  { code: string; name: string };
-  country: { code: string; name: string };
+  numInt: string;
+  suburb:   { name: string; code: string };
+  town:     { name: string; code: string };
+  state:    { name: string; code: string };
+  location: { name: string; code: string };
+  city:     { name: string; code: string };
+  country:  { name: string; code: string };
   cp: string;
+  reference?: string;
 }
 
-// ── Subdocumentos — Employee Profile ──────────────────────────────────────
+// ── Subdocumentos — Employee Documents ────────────────────────────────────
 
 export interface EmployeeDocument {
-  type: 'ine' | 'nss' | 'contrato' | 'licencia' | 'otro';
-  fileUrl: string;
-  expiresAt: Date | null;
+  type:       'ine' | 'nss' | 'contrato' | 'licencia' | 'otro';
+  fileUrl:    string;
+  expiresAt:  Date | null;
   verifiedAt: Date | null;
 }
 
 export interface EmployeeCertification {
-  name: string;
-  issuedBy: string;
-  number: string;
-  issuedAt: Date;
+  name:      string;
+  issuedBy:  string;
+  number:    string;
+  issuedAt:  Date;
   expiresAt: Date;
-  fileUrl: string | null;
+  fileUrl:   string | null;
 }
+
+// ── Subdocumentos — Driver License ────────────────────────────────────────
 
 export interface DriverLicense {
-  type: 'federal' | 'estatal' | 'utilitaria';
-  number: string;
-  class: 'A' | 'B' | 'C' | 'D' | 'E';
-  issuedAt: Date;
+  type:      'federal' | 'estatal' | 'utilitaria';
+  number:    string;
+  class:     'A' | 'B' | 'C' | 'D' | 'E';
+  issuedAt:  Date;
   expiresAt: Date;
-  state: string | null;
-  fileUrl: string | null;
+  state:     string | null;
+  fileUrl:   string | null;
 }
+
+// ── Subdocumentos — Medical Exam ──────────────────────────────────────────
+
+export interface MedicalExam {
+  folio:         string;
+  issuedAt:      Date;
+  expiresAt:     Date;
+  result:        'apto' | 'apto_con_restricciones' | 'no_apto';
+  restrictions:  string | null;
+  issuedBy:      string;
+  licenseNumber: string;
+  fileUrl:       string | null;
+}
+
+// ── Subdocumentos — Vehicle Operator ──────────────────────────────────────
 
 export interface VehicleOperator {
-  licenses: DriverLicense[];
+  isOperator:    boolean;
+  driverStatus:  'available' | 'on_trip' | 'off_duty' | null;
+  currentUnitId: ObjectId | null;
+  licenses:      DriverLicense[];
+  medicalExam:   MedicalExam | null;
   passport: {
-    number: string;
+    number:    string;
     expiresAt: Date;
-    fileUrl: string | null;
+    fileUrl:   string | null;
   } | null;
   visa: {
-    type: 'B1/B2' | 'FAST' | 'otro';
-    number: string;
+    type:      'B1/B2' | 'FAST' | 'otro';
+    number:    string;
     expiresAt: Date;
-    fileUrl: string | null;
+    fileUrl:   string | null;
   } | null;
-  currentUnitId: ObjectId | null;
-  driverStatus: 'available' | 'on_trip' | 'off_duty' | null;
 }
 
+// ── Subdocumentos — Employee Profile ──────────────────────────────────────
+
 export interface EmployeeProfile {
-  rfc: string;
-  curp: string;
-  dateOfHire: Date;
-  address: Address;
-  documents: EmployeeDocument[];
-  certifications: EmployeeCertification[];
+  isEmployee:      boolean;
+  position:        string;
+  department:      string;
+  dateOfHire:      Date;
+  curp:            string;
+  rfc:             string;
+  razonSocial:     string;
+  regimenFiscal:   { code: string; name: string } | null;
+  address:         Address | null;
+  documents:       EmployeeDocument[];
+  certifications:  EmployeeCertification[];
   vehicleOperator: VehicleOperator | null;
 }
 
 // ── Subdocumentos — Client Memberships ────────────────────────────────────
 
 export interface ClientMembership {
-  clientId: ObjectId;
-  alias: string;
-  access: string[];
+  clientId:  ObjectId;
+  alias:     string;
+  access:    string[];
   isDefault: boolean;
 }
 
@@ -137,13 +174,13 @@ export interface ClientMembership {
 
 export interface UserDocument {
   _id: ObjectId;
-  orgId: ObjectId | null;        // null solo si userType = super_admin
+  orgId: ObjectId | null;
   userType: UserType;
   displayName: string;
   firstName: string;
   lastName: string;
   email: string;
-  phone: string[] | null;
+  phones: PhoneEntry[];              // ← era phone: string[] | null
   status: UserStatus;
   roles: UserRole[];
   employeeProfile: EmployeeProfile | null;
@@ -168,18 +205,18 @@ export interface User {
   firstName: string;
   lastName: string;
   email: string;
-  phone: string[] | null;
+  phones: PhoneEntry[];              // ← era phone: string[] | null
   status: UserStatus;
   roles: UserRoleDto[];
   employeeProfile: EmployeeProfile | null;
   clientMemberships: {
-    clientId: string;
-    alias: string;
-    access: string[];
+    clientId:  string;
+    alias:     string;
+    access:    string[];
     isDefault: boolean;
   }[] | null;
   identities: {
-    google: OAuthIdentity | null;
+    google:    OAuthIdentity | null;
     microsoft: OAuthIdentity | null;
   };
   preferences: UserPreferences;
@@ -199,7 +236,7 @@ export interface CreateUserDto {
   displayName: string;
   firstName?: string;
   lastName?: string;
-  phone?: string[] | null;
+  phones?: PhoneEntry[];
   roles?: UserRoleDto[];
   clientId?: string | null;
   identities?: Partial<UserIdentities>;
@@ -211,7 +248,7 @@ export interface UpdateUserDto {
   displayName?: string;
   firstName?: string;
   lastName?: string;
-  phone?: string[] | null;
+  phones?: PhoneEntry[];
   status?: UserStatus;
   roles?: UserRoleDto[];
   clientId?: string | null;

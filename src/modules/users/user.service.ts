@@ -44,7 +44,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
 export async function listUsers(
   orgId: string,
-  filter: { status?: UserStatus } = {},
+  filter: { status?: UserStatus; userType?: string } = {},
 ): Promise<User[]> {
   // Solo cacheamos la lista sin filtros — con filtros va directo a DB
   if (Object.keys(filter).length === 0) {

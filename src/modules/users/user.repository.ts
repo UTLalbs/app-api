@@ -5,6 +5,7 @@ import { NotFoundError } from '../../shared/errors/AppError';
 import { getUserCollection } from './user.model';
 import type {
   CreateUserDto,
+  OAuthIdentity,
   UpdateUserDto,
   User,
   UserDocument,
@@ -13,7 +14,6 @@ import type {
 } from './user.types';
 
 // ── Proyección base ────────────────────────────────────────────────────────
-// Excluye campos sensibles de todos los queries
 
 const BASE_PROJECTION = {
   _id: 1,
@@ -23,7 +23,7 @@ const BASE_PROJECTION = {
   firstName: 1,
   lastName: 1,
   email: 1,
-  phone: 1,
+  phones: 1,
   status: 1,
   roles: 1,
   employeeProfile: 1,
@@ -34,7 +34,6 @@ const BASE_PROJECTION = {
   lastLoginAt: 1,
   createdAt: 1,
   updatedAt: 1,
-  // excluidos: identities.local (passwordHash, history, mfa)
   'identities.google': 1,
   'identities.microsoft': 1,
 } as const;
@@ -50,7 +49,7 @@ function toUser(doc: UserDocument): User {
     firstName: doc.firstName,
     lastName: doc.lastName,
     email: doc.email,
-    phone: doc.phone ?? null,
+    phones: doc.phones ?? [],
     status: doc.status,
     roles: doc.roles.map((r) => ({
       roleId: r.roleId.toHexString(),
@@ -59,14 +58,14 @@ function toUser(doc: UserDocument): User {
     employeeProfile: doc.employeeProfile ?? null,
     clientMemberships: doc.clientMemberships
       ? doc.clientMemberships.map((m) => ({
-          clientId: m.clientId.toHexString(),
-          alias: m.alias,
-          access: m.access,
+          clientId:  m.clientId.toHexString(),
+          alias:     m.alias,
+          access:    m.access,
           isDefault: m.isDefault,
         }))
       : null,
     identities: {
-      google: doc.identities?.google ?? null,
+      google:    doc.identities?.google    ?? null,
       microsoft: doc.identities?.microsoft ?? null,
     },
     preferences: doc.preferences ?? {
@@ -74,11 +73,11 @@ function toUser(doc: UserDocument): User {
       timezone: 'America/Mexico_City',
       notifications: { push: false },
     },
-    termsAgreement: doc.termsAgreement ?? null,
-    clientId: doc.clientId ? doc.clientId.toHexString() : null,
-    lastLoginAt: doc.lastLoginAt ?? null,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
+    termsAgreement:  doc.termsAgreement  ?? null,
+    clientId:        doc.clientId ? doc.clientId.toHexString() : null,
+    lastLoginAt:     doc.lastLoginAt     ?? null,
+    createdAt:       doc.createdAt,
+    updatedAt:       doc.updatedAt,
   };
 }
 
@@ -126,14 +125,15 @@ export async function findUserByIdentity(
 
 export async function findAllUsers(
   orgId: string,
-  filter: { status?: string } = {},
+  filter: { status?: string; userType?: string } = {},
 ): Promise<User[]> {
   const query: Record<string, unknown> = {
     orgId: new ObjectId(orgId),
     deletedAt: null,
   };
 
-  if (filter.status) query.status = filter.status;
+  if (filter.status)   query.status   = filter.status;
+  if (filter.userType) query.userType = filter.userType;
 
   const docs = await getUserCollection()
     .find(query, { projection: BASE_PROJECTION })
@@ -150,67 +150,67 @@ export async function createUser(dto: CreateUserDto): Promise<User> {
 
   const roles: UserRole[] = (dto.roles ?? []).map((r) => ({
     roleId: new ObjectId(r.roleId),
-    name: r.name,
+    name:   r.name,
   }));
 
   const doc: Omit<UserDocument, '_id'> = {
-    orgId: dto.orgId ? new ObjectId(dto.orgId) : null,
-    userType: dto.userType ?? 'internal',
+    orgId:     dto.orgId ? new ObjectId(dto.orgId) : null,
+    userType:  dto.userType ?? 'internal',
     displayName: dto.displayName,
-    firstName: dto.firstName ?? '',
-    lastName: dto.lastName ?? '',
-    email: dto.email.toLowerCase(),
-    phone: dto.phone ?? null,
-    status: 'pending',
+    firstName:   dto.firstName ?? '',
+    lastName:    dto.lastName  ?? '',
+    email:       dto.email.toLowerCase(),
+    phones:      dto.phones ?? [],
+    status:      'pending',
     roles,
-    employeeProfile: dto.employeeProfile ?? null,
+    employeeProfile:   dto.employeeProfile   ?? null,
     clientMemberships: dto.clientMemberships ?? null,
     identities: {
-      local: null,
-      google: dto.identities?.google ?? null,
+      local:     null,
+      google:    dto.identities?.google    ?? null,
       microsoft: dto.identities?.microsoft ?? null,
     },
     preferences: {
-      language: 'es',
-      timezone: 'America/Mexico_City',
+      language:  'es',
+      timezone:  'America/Mexico_City',
       notifications: { push: false },
     },
     termsAgreement: null,
-    clientId: dto.clientId ? new ObjectId(dto.clientId) : null,
+    clientId:  dto.clientId ? new ObjectId(dto.clientId) : null,
     lastLoginAt: null,
-    createdAt: now,
-    updatedAt: now,
-    deletedAt: null,
+    createdAt:   now,
+    updatedAt:   now,
+    deletedAt:   null,
   };
 
   const result = await getUserCollection().insertOne(doc as UserDocument);
 
   return {
-    id: result.insertedId.toHexString(),
-    orgId: doc.orgId ? doc.orgId.toHexString() : null,
-    userType: doc.userType,
+    id:          result.insertedId.toHexString(),
+    orgId:       doc.orgId ? doc.orgId.toHexString() : null,
+    userType:    doc.userType,
     displayName: doc.displayName,
-    firstName: doc.firstName,
-    lastName: doc.lastName,
-    email: doc.email,
-    phone: doc.phone,
-    status: doc.status,
-    roles: roles.map((r) => ({
+    firstName:   doc.firstName,
+    lastName:    doc.lastName,
+    email:       doc.email,
+    phones:      doc.phones,
+    status:      doc.status,
+    roles:       roles.map((r) => ({
       roleId: r.roleId.toHexString(),
-      name: r.name,
+      name:   r.name,
     })),
-    employeeProfile: doc.employeeProfile,
+    employeeProfile:   doc.employeeProfile,
     clientMemberships: null,
     identities: {
-      google: doc.identities.google,
-      microsoft: doc.identities.microsoft,
+      google:    doc.identities.google    as OAuthIdentity | null,
+      microsoft: doc.identities.microsoft as OAuthIdentity | null,
     },
-    preferences: doc.preferences,
+    preferences:    doc.preferences,
     termsAgreement: null,
-    clientId: doc.clientId ? doc.clientId.toHexString() : null,
-    lastLoginAt: null,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
+    clientId:       doc.clientId ? doc.clientId.toHexString() : null,
+    lastLoginAt:    null,
+    createdAt:      doc.createdAt,
+    updatedAt:      doc.updatedAt,
   };
 }
 
@@ -231,7 +231,7 @@ export async function updateUser(
   if (roles !== undefined) {
     setFields.roles = roles.map((r) => ({
       roleId: new ObjectId(r.roleId),
-      name: r.name,
+      name:   r.name,
     }));
   }
 
@@ -248,7 +248,7 @@ export async function updateUser(
     { $set: setFields },
     {
       returnDocument: 'after',
-      projection: BASE_PROJECTION,
+      projection:     BASE_PROJECTION,
     },
   );
 
@@ -290,8 +290,8 @@ export async function linkUserIdentity(
     { _id: new ObjectId(id), deletedAt: null },
     {
       $set: {
-        [field]: { sub, email, connectedAt: new Date() },
-        updatedAt: new Date(),
+        [field]:    { sub, email, connectedAt: new Date() },
+        updatedAt:  new Date(),
       },
     },
     { returnDocument: 'after', projection: BASE_PROJECTION },
@@ -319,6 +319,12 @@ export async function softDeleteUser(
 
   await getUserCollection().updateOne(
     { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
-    { $set: { deletedAt: new Date(), status: 'inactive', updatedAt: new Date() } },
+    {
+      $set: {
+        deletedAt: new Date(),
+        status:    'inactive',
+        updatedAt: new Date(),
+      },
+    },
   );
 }
