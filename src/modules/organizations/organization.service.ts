@@ -1,6 +1,8 @@
 import { logger } from '../../config/logger';
 import {
   cacheDel,
+  cacheGet,
+  cacheSet,
   getOrSet,
   CacheKeys,
   CacheTTL,
@@ -17,6 +19,25 @@ import {
   softDeleteOrganization,
 } from './organization.repository';
 import type { CreateOrganizationDto, Organization, UpdateOrganizationDto } from './organization.types';
+
+
+// ── Helper timezone ────────────────────────────────────────────────────────
+
+const DEFAULT_TIMEZONE = 'America/Mexico_City';
+
+export async function getOrgTimezone(orgId: string): Promise<string> {
+  const cacheKey = CacheKeys.orgTimezone(orgId);
+
+  const cached = await cacheGet<string>(cacheKey);
+  if (cached) return cached;
+
+  const org = await findOrganizationById(orgId);
+  const timezone = org?.settings.timezone ?? DEFAULT_TIMEZONE;
+
+  await cacheSet(cacheKey, timezone, CacheTTL.MEDIUM);
+
+  return timezone;
+}
 
 // ── Utilidad — genera slug a partir del nombre ─────────────────────────────
 // "Unidos Transport" → "unidos-transport"
@@ -82,6 +103,8 @@ export async function editOrganization(
   await Promise.all([
     cacheDel(CacheKeys.orgOne(id)),
     cacheDel(CacheKeys.orgList()),
+    // Invalidar timezone si cambió settings
+    dto.settings?.timezone ? cacheDel(CacheKeys.orgTimezone(id)) : Promise.resolve(),
   ]);
 
   logger.info({ orgId: id }, 'Organization updated');

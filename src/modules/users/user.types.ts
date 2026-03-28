@@ -50,7 +50,7 @@ export interface UserIdentities {
 
 export interface UserPreferences {
   language: string;
-  timezone: string;
+  timezone: string | null;    // ← null = heredar de la org
   notifications: {
     push: boolean;
   };

@@ -46,13 +46,15 @@ export interface AuthenticatedUser {
   id: string;
   email: string;
   displayName: string;
-  orgId: string | null;          // ← null para super_admin
-  userType: string;              // ← nuevo
+  orgId: string | null;
+  userType: string;
   roles: UserRoleDto[];
   clientId?: string | null;
-  impersonating?: {              // ← nuevo
+  impersonating?: {
     orgId: string;
     orgName: string;
   } | null;
+  orgTimezone: string;    
+  userTimezone: string;   
   resolvedPermissions: Record<string, string[]>;
 }
