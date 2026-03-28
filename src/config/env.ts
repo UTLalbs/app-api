@@ -63,7 +63,10 @@ const envSchema = z.object({
 
   // FacturoPorTi / Tax service
   FACTUROPORTI_BASE_URL: z.string().url(),
-  FACTUROPORTI_TOKEN: z.string().min(1),
+  FACTUROPORTI_TOKEN: z.string().min( 1 ),
+  
+  // Developer notification (placeholders hasta Phase 2)
+  DEVELOPER_EMAIL: z.string().email().optional(),
 });
 
 // ── Validar ────────────────────────────────────────────────────────────────

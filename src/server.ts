@@ -5,6 +5,7 @@ import {logger} from "./config/logger";
 import {getRedisClient, disconnectRedis} from "./config/redis";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
+import { createErrorReportIndexes } from "./modules/error-reports/error-report.model";
 import { createOrganizationIndexes } from "./modules/organizations/organization.model";
 import { createRoleIndexes } from "./modules/roles/role.model";
 import { seedRoles } from "./modules/roles/role.seed";
@@ -16,7 +17,7 @@ async function bootstrap(): Promise<void> {
 	await connectDatabase();
 
 	// Índices — orden no importa, son independientes
-  await Promise.all( [ createUserIndexes(), createOrganizationIndexes(), createRoleIndexes(), createTokenIndexes() ] );
+  await Promise.all( [ createUserIndexes(), createOrganizationIndexes(), createRoleIndexes(), createTokenIndexes(), createErrorReportIndexes() ] );
   
   // Seed — crea o actualiza roles del sistema
   await seedRoles();
