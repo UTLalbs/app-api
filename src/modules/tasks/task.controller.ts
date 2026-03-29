@@ -21,22 +21,34 @@ import type {
 
 export const getTasks = asyncHandler(
   async (req: Request & ListTasksInput, res: Response) => {
-    // Construir filtro de acceso según userType
+    const userId = req.user!.id;
+    const userType = req.user!.userType;
+    const orgId = req.user!.orgId;
+    const impersonating = req.user!.impersonating;
+
     let accessFilter: Record<string, unknown> = {};
 
-    if (req.user!.userType === 'super_admin') {
-      // super_admin ve tasks de area='development'
-      // O donde aparece en participants
-      accessFilter = {
-        $or: [
-          { area: 'development' },
-          { participants: new ObjectId(req.user!.id) },
-        ],
-      };
+    if (userType === 'super_admin') {
+      if (impersonating) {
+        // super_admin CON impersonation → todos los tasks de la org impersonada
+        accessFilter = {
+          orgId: new ObjectId(impersonating.orgId),
+        };
+      } else {
+        // super_admin SIN impersonation → solo tasks de area development
+        accessFilter = {
+          area: 'development',
+        };
+      }
     } else {
-      // otros usuarios ven tasks de su orgId
+      // Usuario normal → tasks de su org donde está involucrado
       accessFilter = {
-        orgId: new ObjectId(req.user!.orgId ?? ''),
+        orgId: new ObjectId(orgId ?? ''),
+        $or: [
+          { assignedBy: new ObjectId(userId) },
+          { assignedTo: new ObjectId(userId) },
+          { participants: new ObjectId(userId) },
+        ],
       };
     }
 
