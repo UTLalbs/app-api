@@ -1,6 +1,7 @@
 import {env} from "../../config/env";
 import {logger} from "../../config/logger";
 import {NotFoundError} from "../../shared/errors/AppError";
+import {deleteNotificationsByTaskId} from "../notifications/notification.repository";
 import {createNotification} from "../notifications/notification.service";
 import {findSuperAdmins} from "../users/user.repository";
 
@@ -19,7 +20,6 @@ import type {
 	TaskQueryFilter,
 	UpdateTaskDto,
 } from "./task.types";
-
 
 // ── Notificación alta prioridad ────────────────────────────────────────────
 
@@ -140,7 +140,32 @@ export async function editTask(
 	if (!before) throw new NotFoundError("Task");
 
 	const updated = await updateTask(id, dto);
+
 	if (!updated) throw new NotFoundError("Task");
+
+	if (dto.status === "resolved") {
+		const notifyIds: string[] = [];
+
+		if (updated.assignedTo) notifyIds.push(updated.assignedTo.id);
+
+		const assignedByStr = before.assignedBy.toHexString();
+		if (!notifyIds.includes(assignedByStr)) notifyIds.push(assignedByStr);
+
+		await Promise.all(
+			notifyIds.map((userId) =>
+				createNotification({
+					userId,
+					orgId: updated.orgId,
+					type: "status_change",
+					taskId: updated.id,
+					taskTitle: updated.title,
+					message: `Task completado: ${updated.title}`,
+					fromUserId: actorId,
+					fromUserName: actorName,
+				}),
+			),
+		);
+	}
 
 	// Notificar cambio de asignado
 	const assignedToChanged =
@@ -199,5 +224,9 @@ export async function editTask(
 export async function removeTask(id: string): Promise<void> {
 	const deleted = await deleteTask(id);
 	if (!deleted) throw new NotFoundError("Task");
-	logger.info({taskId: id}, "Task deleted");
+
+	// Eliminar todas las notificaciones asociadas
+	await deleteNotificationsByTaskId(id);
+
+	logger.info({taskId: id}, "Task and notifications deleted");
 }

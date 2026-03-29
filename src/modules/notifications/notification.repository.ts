@@ -144,3 +144,11 @@ export async function markAllNotificationsRead(
 
 	return result.modifiedCount;
 }
+
+export async function deleteNotificationsByTaskId(
+  taskId: string,
+): Promise<void> {
+  await getNotificationCollection().deleteMany({
+    taskId: new ObjectId(taskId),
+  });
+}
