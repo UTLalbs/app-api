@@ -12,18 +12,22 @@ export function getNotificationCollection(): Collection<NotificationDocument> {
 export async function createNotificationIndexes(): Promise<void> {
   const collection = getNotificationCollection();
 
-  await collection.createIndexes([
-    // Notificaciones de un usuario — leídas/no leídas
-    {
-      key: { userId: 1, read: 1 },
-      name: 'userId_read',
-    },
-    // Notificaciones de un usuario — ordenadas por fecha
-    {
-      key: { userId: 1, createdAt: -1 },
-      name: 'userId_createdAt',
-    },
-  ]);
+ await collection.createIndexes([
+  {
+    key: { userId: 1, read: 1 },
+    name: 'userId_read',
+  },
+  {
+    key: { userId: 1, createdAt: -1 },
+    name: 'userId_createdAt',
+  },
+  // TTL — eliminar notificaciones después de 30 días
+  {
+    key: { expiresAt: 1 },
+    name: 'ttl_30_days',
+    expireAfterSeconds: 0,
+  },
+]);
 
   logger.info('✅  Notification indexes created');
 }

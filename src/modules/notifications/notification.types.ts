@@ -20,7 +20,8 @@ export interface NotificationDocument {
   message:      string;
   fromUserId:   ObjectId;
   fromUserName: string;
-  read:         boolean;
+  read: boolean;
+  expiresAt: Date;
   createdAt:    Date;
 }
 
@@ -37,6 +38,7 @@ export interface Notification {
   fromUserId:   string;
   fromUserName: string;
   read:         boolean;
+  expiresAt:    Date;
   createdAt:    Date;
 }
 

@@ -1,6 +1,7 @@
 import { ObjectId } from 'mongodb';
 
 import { getUserCollection } from '../users/user.model';
+import { findSuperAdmins } from '../users/user.repository';
 
 import { getTaskCollection } from './task.model';
 import type {
@@ -95,10 +96,13 @@ async function toTask(
 
 export async function findDuplicateTask(
   sourceId: string,
-): Promise<Task | null> {
+): Promise<Task | null>
+{
+  
+
   const doc = await getTaskCollection().findOne({
     sourceId,
-    status: { $in: ['open', 'in_progress'] },
+    status: { $in: ['open', 'in_progress', 'ignored'] },
   });
 
   if (!doc) return null;
@@ -111,6 +115,27 @@ export async function findDuplicateTask(
 export async function createTask(dto: CreateTaskDto): Promise<Task> {
   const now = new Date();
 
+  // Si es error_report o source=system → agregar super_admins como participants
+  let extraParticipants: ObjectId[] = [];
+
+    if (dto.type === 'error_report' || dto.source === 'system') {
+    const superAdmins = await findSuperAdmins();
+    extraParticipants = superAdmins.map((u) => new ObjectId(u.id));
+    }
+  
+  const baseParticipants = ( dto.participants ?? [] ).map( ( id ) => new ObjectId( id ) );
+  
+    // Merge sin duplicados
+  const allParticipantIds = [
+    ...new Map(
+      [...baseParticipants, ...extraParticipants].map((id) => [
+        id.toHexString(),
+        id,
+      ]),
+    ).values(),
+  ];
+
+
   const doc: Omit<TaskDocument, '_id'> = {
     orgId:        dto.orgId ? new ObjectId(dto.orgId) : null,
     type:         dto.type,
@@ -122,7 +147,7 @@ export async function createTask(dto: CreateTaskDto): Promise<Task> {
     area:         dto.area,
     assignedTo:   dto.assignedTo ? new ObjectId(dto.assignedTo) : null,
     assignedBy:   new ObjectId(dto.assignedBy),
-    participants: (dto.participants ?? []).map((id) => new ObjectId(id)),
+    participants: allParticipantIds,
     status:       dto.status,
     entity:       dto.entity,
     entityId:     dto.entityId,
