@@ -5,9 +5,11 @@ import {logger} from "./config/logger";
 import {getRedisClient, disconnectRedis} from "./config/redis";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
+import { createNotificationIndexes } from "./modules/notifications/notification.model";
 import { createOrganizationIndexes } from "./modules/organizations/organization.model";
 import { createRoleIndexes } from "./modules/roles/role.model";
 import { seedRoles } from "./modules/roles/role.seed";
+import { createTaskIndexes } from './modules/tasks/task.model';
 import { createTokenIndexes } from "./modules/tokens/token.model";
 import { createUserIndexes } from "./modules/users/user.model";
 
@@ -16,7 +18,7 @@ async function bootstrap(): Promise<void> {
 	await connectDatabase();
 
 	// Índices — orden no importa, son independientes
-  await Promise.all( [ createUserIndexes(), createOrganizationIndexes(), createRoleIndexes(), createTokenIndexes() ] );
+  await Promise.all( [ createUserIndexes(), createOrganizationIndexes(), createRoleIndexes(), createTokenIndexes() , createTaskIndexes(), createNotificationIndexes()] );
   
   // Seed — crea o actualiza roles del sistema
   await seedRoles();
