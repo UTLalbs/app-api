@@ -43,11 +43,11 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 export async function listUsers(
-  orgId: string,
+  orgId: string | null,
   filter: { status?: UserStatus; userType?: string } = {},
 ): Promise<User[]> {
-  // Solo cacheamos la lista sin filtros — con filtros va directo a DB
-  if (Object.keys(filter).length === 0) {
+  // Solo cacheamos si hay orgId y sin filtros
+  if (orgId && Object.keys(filter).length === 0) {
     return getOrSet(
       CacheKeys.userList(orgId),
       () => findAllUsers(orgId, filter),

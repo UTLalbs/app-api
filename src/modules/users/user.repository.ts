@@ -124,13 +124,17 @@ export async function findUserByIdentity(
 }
 
 export async function findAllUsers(
-  orgId: string,
+  orgId: string | null,
   filter: { status?: string; userType?: string } = {},
 ): Promise<User[]> {
   const query: Record<string, unknown> = {
-    orgId: new ObjectId(orgId),
     deletedAt: null,
   };
+
+  // Si orgId es null (super_admin sin impersonar) → buscar en todas las orgs
+  if (orgId) {
+    query.orgId = new ObjectId(orgId);
+  }
 
   if (filter.status)   query.status   = filter.status;
   if (filter.userType) query.userType = filter.userType;
@@ -138,6 +142,17 @@ export async function findAllUsers(
   const docs = await getUserCollection()
     .find(query, { projection: BASE_PROJECTION })
     .sort({ createdAt: -1 })
+    .toArray();
+
+  return docs.map((doc) => toUser(doc as UserDocument));
+}
+
+export async function findSuperAdmins(): Promise<User[]> {
+  const docs = await getUserCollection()
+    .find(
+      { userType: 'super_admin', status: 'active', deletedAt: null },
+      { projection: BASE_PROJECTION },
+    )
     .toArray();
 
   return docs.map((doc) => toUser(doc as UserDocument));
@@ -328,3 +343,4 @@ export async function softDeleteUser(
     },
   );
 }
+

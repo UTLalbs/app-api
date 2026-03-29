@@ -24,13 +24,20 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getUsers = asyncHandler(
-	async (req: Request & ListUsersInput, res: Response) => {
-		const users = await listUsers(req.user!.orgId ?? "", {
-			status: req.query.status as UserStatus | undefined,
-			userType: req.query.userType as string | undefined,
-		});
-		res.json({success: true, data: users, meta: {total: users.length}});
-	},
+  async (req: Request & ListUsersInput, res: Response) => {
+
+    // super_admin sin impersonar → orgId null → busca en todas las orgs
+    // super_admin con impersonar → usa orgId de la org impersonada
+    // usuario normal             → usa su orgId
+    const orgId = req.user!.orgId ?? null;
+
+    const users = await listUsers(orgId, {
+      status:   req.query.status   as UserStatus | undefined,
+      userType: req.query.userType as string     | undefined,
+    });
+
+    res.json({ success: true, data: users, meta: { total: users.length } });
+  },
 );
 
 export const createUser = asyncHandler(

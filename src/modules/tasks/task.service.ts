@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import { NotFoundError } from '../../shared/errors/AppError';
 import { createNotification } from '../notifications/notification.service';
+import { findSuperAdmins } from '../users/user.repository';
 
 import {
   findDuplicateTask,
@@ -18,6 +19,10 @@ import type {
   TaskQueryFilter,
   UpdateTaskDto,
 } from './task.types';
+
+// Constante para el ID de sistema
+const SYSTEM_USER_ID = '000000000000000000000000';
+const SYSTEM_USER_NAME = 'Sistema';
 
 // ── Notificación alta prioridad ────────────────────────────────────────────
 
@@ -65,6 +70,26 @@ export async function submitTask(
     { taskId: task.id, type: task.type, priority: task.priority },
     'Task created',
   );
+
+  // Notificar a super_admins si es task de sistema en area development
+if (dto.source === 'system' && dto.area === 'development') {
+  const superAdmins = await findSuperAdmins();
+
+  await Promise.all(
+    superAdmins.map((admin) =>
+      createNotification({
+        userId:       admin.id,
+        orgId:        null,
+        type:         'system',
+        taskId:       task.id,
+        taskTitle:    task.title,
+        message:      `Nuevo task automático: ${task.title}`,
+        fromUserId:   dto.assignedBy ?? SYSTEM_USER_ID,
+        fromUserName: SYSTEM_USER_NAME,
+      }),
+    ),
+  );
+}
 
   // Notificar al asignado
   if (dto.assignedTo) {
