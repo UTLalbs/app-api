@@ -1,27 +1,27 @@
+// src/config/logger.ts
 import pino from 'pino';
 
 import { env } from './env';
 
 const isDevelopment = env.NODE_ENV === 'development';
+const isVerbose     = env.LOG_VERBOSE === 'true';
 
 export const logger = pino({
   level: env.LOG_LEVEL,
-  // Pretty print solo en desarrollo — en producción JSON puro
+
   ...(isDevelopment && {
     transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-        translateTime: 'SYS:HH:MM:ss',
-        ignore: 'pid,hostname',
-      },
+      target: isVerbose
+        ? 'pino-pretty'                            // verbose: comportamiento default
+        : './logger.transport',                    // compacto: nuestro transport
+      options: isVerbose
+        ? { colorize: true, translateTime: 'SYS:HH:MM:ss', ignore: 'pid,hostname' }
+        : {},
     },
   }),
-  // Campos base en cada log
-  base: {
-    env: env.NODE_ENV,
-  },
-  // Redactar campos sensibles — nunca loggear estos valores
+
+  base: { env: env.NODE_ENV },
+
   redact: {
     paths: [
       'req.headers.authorization',
