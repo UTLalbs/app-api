@@ -15,13 +15,14 @@ import {
 	findAllUsers,
 	createUser,
 	updateUser,
-	softDeleteUser,
+  softDeleteUser,
 } from "./user.repository";
 import type {
 	CreateUserDto,
 	UpdateUserDto,
 	User,
-	UserStatus,
+  UserStatus,
+  UserQueryFilter
 } from "./user.types";
 
 // ── Consultas ──────────────────────────────────────────────────────────────
@@ -43,19 +44,22 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 }
 
 export async function listUsers(
-  orgId: string | null,
-  filter: { status?: UserStatus; userType?: string } = {},
-): Promise<User[]> {
-  // Solo cacheamos si hay orgId y sin filtros
+  filter: UserQueryFilter,
+  accessFilter: Record<string, unknown>,
+): Promise<{ users: User[]; total: number }> {
+  // Cache solo cuando hay orgId y sin filtros adicionales
+  const orgId = accessFilter.orgId as string | undefined;
+
   if (orgId && Object.keys(filter).length === 0) {
-    return getOrSet(
-      CacheKeys.userList(orgId),
-      () => findAllUsers(orgId, filter),
+    const cached = await getOrSet(
+      CacheKeys.userList(orgId.toString()),
+      () => findAllUsers(filter, accessFilter),
       CacheTTL.SHORT,
     );
+    return cached;
   }
 
-  return findAllUsers(orgId, filter);
+  return findAllUsers(filter, accessFilter);
 }
 
 // ── Creación ───────────────────────────────────────────────────────────────

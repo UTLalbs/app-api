@@ -29,7 +29,6 @@ const envSchema = z.object({
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default( 'info' ),
-  LOG_VERBOSE: z.string().default('false'), // nueva flag para modo de log detallado
 
   // Database
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),

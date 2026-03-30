@@ -1,6 +1,9 @@
+import pinoHttp from "pino-http";
+
 import {createApp} from "./app";
 import {connectDatabase, disconnectDatabase} from "./config/database";
 import {env} from "./config/env";
+import { httpLoggerOptions } from "./config/http-logger";
 import {logger} from "./config/logger";
 import {getRedisClient, disconnectRedis} from "./config/redis";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
@@ -29,10 +32,13 @@ async function bootstrap(): Promise<void> {
 	// Inicializar Redis
 	getRedisClient();
 
-	// 4. Crear app Express
-	const app = createApp();
+	// Crear app Express
+	const app = createApp(pinoHttp(httpLoggerOptions));
 
-	// 5. Levantar servidor HTTP
+	// Middleware de logging HTTP (pino-http)
+	app.use(pinoHttp(httpLoggerOptions));
+
+	// Levantar servidor HTTP
 	const server = app.listen(env.PORT, () => {
 		logger.info(`🚀  Server running on port ${env.PORT} [${env.NODE_ENV}]`);
 	});

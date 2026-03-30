@@ -123,18 +123,27 @@ const clientMembershipSchema = z.object({
 // ── Schemas principales ────────────────────────────────────────────────────
 
 export const createUserSchema = z.object({
-	body: z.object({
-		email: z.string().email(),
-		displayName: z.string().min(2).max(100),
-		firstName: z.string().min(1).max(50).optional(),
-		lastName: z.string().min(1).max(50).optional(),
-		phones: z.array(phoneEntrySchema).max(2).optional(),
-		userType: z.enum(["internal", "client_contact", "super_admin"]).optional(),
-		roles: z.array(userRoleSchema).optional(),
-		clientId: z.string().length(24).nullable().optional(),
-		employeeProfile: employeeProfileSchema.nullable().optional(),
-		clientMemberships: z.array(clientMembershipSchema).nullable().optional(),
-	}),
+	body: z
+		.object({
+			email: z.string().email(),
+			displayName: z.string().min(2).max(100),
+			firstName: z.string().min(1).max(50).optional(),
+			lastName: z.string().min(1).max(50).optional(),
+			phones: z.array(phoneEntrySchema).max(2).optional(),
+			userType: z
+				.enum(["internal", "client_contact", "super_admin"])
+				.optional(),
+			roles: z.array(userRoleSchema).optional(),
+			clientId: z.string().length(24).nullable().optional(),
+			isGroup: z.boolean().default(false), // ← agregar
+			groupAlias: z.string().min(1).max(100).optional(), // ← agregar
+			employeeProfile: employeeProfileSchema.nullable().optional(),
+			clientMemberships: z.array(clientMembershipSchema).nullable().optional(),
+		})
+		.refine((data) => !data.isGroup || !!data.groupAlias, {
+			message: "groupAlias es requerido cuando isGroup es true",
+			path: ["groupAlias"],
+		}),
 });
 
 export const updateUserSchema = z.object({
@@ -146,6 +155,8 @@ export const updateUserSchema = z.object({
 		phones: z.array(phoneEntrySchema).max(2).optional(),
 		roles: z.array(userRoleSchema).optional(),
 		clientId: z.string().length(24).nullable().optional(),
+		isGroup: z.boolean().optional(),
+		groupAlias: z.string().min(1).max(100).optional(),
 		employeeProfile: employeeProfileSchema.nullable().optional(),
 		clientMemberships: z.array(clientMembershipSchema).nullable().optional(),
 		preferences: z
@@ -166,7 +177,8 @@ export const changeStatusSchema = z.object({
 export const listUsersSchema = z.object({
 	query: z.object({
 		status: z.enum(["active", "inactive", "suspended", "pending"]).optional(),
-		userType: z.enum(["internal", "client_contact", "super_admin"]).optional(),
+		userType: z.enum( [ "internal", "client_contact", "super_admin" ] ).optional(),
+		 isGroup:  z.enum(['true', 'false']).optional(),   
 	}),
 });
 

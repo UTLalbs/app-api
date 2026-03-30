@@ -10,7 +10,7 @@ import {
 	changeUserStatus,
 	removeUser,
 } from "./user.service";
-import type {UserStatus} from "./user.types";
+import type {UserQueryFilter, UserStatus} from "./user.types";
 import type {
 	ChangeStatusInput,
 	CreateUserInput,
@@ -25,18 +25,48 @@ export const getUser = asyncHandler(async (req: Request, res: Response) => {
 
 export const getUsers = asyncHandler(
   async (req: Request & ListUsersInput, res: Response) => {
+    const userType  = req.user!.userType;
+    const orgId     = req.user!.orgId;
+    const impersonating = req.user!.impersonating;
 
-    // super_admin sin impersonar → orgId null → busca en todas las orgs
-    // super_admin con impersonar → usa orgId de la org impersonada
-    // usuario normal             → usa su orgId
-    const orgId = req.user!.orgId ?? null;
+    // ── Construir accessFilter según userType ──────────────────────────
+    let accessFilter: Record<string, unknown> = {};
 
-    const users = await listUsers(orgId, {
-      status:   req.query.status   as UserStatus | undefined,
-      userType: req.query.userType as string     | undefined,
-    });
+    if (userType === 'super_admin') {
+      if (impersonating) {
+        // super_admin CON impersonation → usuarios de la org impersonada
+        accessFilter = {
+          orgId:    impersonating.orgId,
+          userType: { $ne: 'super_admin' },
+        };
+      } else {
+        // super_admin SIN impersonation → solo super_admins
+        accessFilter = {
+          userType: 'super_admin',
+        };
+      }
+    } else {
+      // Usuario normal → usuarios de su org, excluir super_admins
+      accessFilter = {
+        orgId:    orgId ?? '',
+        userType: { $ne: 'super_admin' },
+      };
+    }
 
-    res.json({ success: true, data: users, meta: { total: users.length } });
+    // ── Construir filter ───────────────────────────────────────────────
+    const filter: UserQueryFilter = {
+      status:   req.query.status   as string | undefined,
+      userType: req.query.userType as string | undefined,
+      isGroup:  req.query.isGroup === 'true'
+        ? true
+        : req.query.isGroup === 'false'
+          ? false
+          : undefined,
+    };
+
+    const { users, total } = await listUsers(filter, accessFilter);
+
+    res.json({ success: true, data: users, meta: { total } });
   },
 );
 
