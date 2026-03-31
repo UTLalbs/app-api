@@ -11,7 +11,7 @@ import type {
 	UserDocument,
 	UserRole,
 	UserStatus,
-	UserQueryFilter
+	UserQueryFilter,
 } from "./user.types";
 
 // ── Proyección base ────────────────────────────────────────────────────────
@@ -23,9 +23,9 @@ const BASE_PROJECTION = {
 	displayName: 1,
 	firstName: 1,
 	lastName: 1,
-  email: 1,
-  isGroup: 1,
-  groupAlias: 1,
+	email: 1,
+	isGroup: 1,
+	groupAlias: 1,
 	phones: 1,
 	status: 1,
 	roles: 1,
@@ -129,31 +129,31 @@ export async function findUserByIdentity(
 }
 
 export async function findAllUsers(
-  filter: UserQueryFilter,
-  accessFilter: Record<string, unknown>,
-): Promise<{ users: User[]; total: number }> {
-	const query: Record<string, unknown> = { ...accessFilter, deletedAt: null };
-	
-	 if (filter.orgId && ObjectId.isValid(filter.orgId)) {
-    query.orgId = new ObjectId(filter.orgId);
-  }
+	filter: UserQueryFilter,
+	accessFilter: Record<string, unknown>,
+): Promise<{users: User[]; total: number}> {
+	const query: Record<string, unknown> = {...accessFilter, deletedAt: null};
 
-  if (filter.status)             query.status   = filter.status;
-  if (filter.userType)           query.userType = filter.userType;
-  if (filter.isGroup !== undefined) query.isGroup = filter.isGroup;
+	if (filter.orgId && ObjectId.isValid(filter.orgId)) {
+		query.orgId = new ObjectId(filter.orgId);
+	}
 
-  const [docs, total] = await Promise.all([
-    getUserCollection()
-      .find(query, { projection: BASE_PROJECTION })
-      .sort({ createdAt: -1 })
-      .toArray(),
-    getUserCollection().countDocuments(query),
-  ]);
+	if (filter.status) query.status = filter.status;
+	if (filter.userType) query.userType = filter.userType;
+	if (filter.isGroup !== undefined) query.isGroup = filter.isGroup;
 
-  return {
-    users: docs.map((doc) => toUser(doc as UserDocument)),
-    total,
-  };
+	const [docs, total] = await Promise.all([
+		getUserCollection()
+			.find(query, {projection: BASE_PROJECTION})
+			.sort({createdAt: -1})
+			.toArray(),
+		getUserCollection().countDocuments(query),
+	]);
+
+	return {
+		users: docs.map((doc) => toUser(doc as UserDocument)),
+		total,
+	};
 }
 
 export async function findSuperAdmins(): Promise<User[]> {
@@ -218,9 +218,9 @@ export async function createUser(dto: CreateUserDto): Promise<User> {
 		displayName: doc.displayName,
 		firstName: doc.firstName,
 		lastName: doc.lastName,
-    email: doc.email,
-    isGroup: doc.isGroup,
-    groupAlias: doc.groupAlias,
+		email: doc.email,
+		isGroup: doc.isGroup,
+		groupAlias: doc.groupAlias,
 		phones: doc.phones,
 		status: doc.status,
 		roles: roles.map((r) => ({
@@ -251,11 +251,20 @@ export async function updateUser(
 
 	const {roles, clientId, employeeProfile, ...rest} = dto;
 
+	// ── Solo incluir campos que vienen explícitamente en el body ──────────
+	// Filtrar undefined para no sobreescribir campos existentes
 	const setFields: Record<string, unknown> = {
-		...rest,
 		updatedAt: new Date(),
 	};
 
+	// Campos simples — solo agregar si NO son undefined
+	for (const [key, value] of Object.entries(rest)) {
+		if (value !== undefined) {
+			setFields[key] = value;
+		}
+	}
+
+	// Campos que requieren transformación
 	if (roles !== undefined) {
 		setFields.roles = roles.map((r) => ({
 			roleId: new ObjectId(r.roleId),
