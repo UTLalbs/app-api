@@ -269,7 +269,8 @@ export interface UpdateUserDto {
 
 // ── Filtros de consulta ────────────────────────────────────────────────────
 export interface UserQueryFilter {
-  status?:   string;
-  userType?: string;
-  isGroup?:  boolean;
+	status?: string;
+	userType?: string;
+	isGroup?: boolean;
+	orgId?: string;
 }

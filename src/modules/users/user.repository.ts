@@ -132,7 +132,11 @@ export async function findAllUsers(
   filter: UserQueryFilter,
   accessFilter: Record<string, unknown>,
 ): Promise<{ users: User[]; total: number }> {
-  const query: Record<string, unknown> = { ...accessFilter, deletedAt: null };
+	const query: Record<string, unknown> = { ...accessFilter, deletedAt: null };
+	
+	 if (filter.orgId && ObjectId.isValid(filter.orgId)) {
+    query.orgId = new ObjectId(filter.orgId);
+  }
 
   if (filter.status)             query.status   = filter.status;
   if (filter.userType)           query.userType = filter.userType;

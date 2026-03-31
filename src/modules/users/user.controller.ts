@@ -61,7 +61,8 @@ export const getUsers = asyncHandler(
         ? true
         : req.query.isGroup === 'false'
           ? false
-          : undefined,
+				: undefined,
+		orgId: impersonating?.orgId ?? (userType !== 'super_admin' ? orgId ?? undefined : undefined),
     };
 
     const { users, total } = await listUsers(filter, accessFilter);
