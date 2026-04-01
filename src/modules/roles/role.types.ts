@@ -31,6 +31,8 @@ export type Resource =
   | 'payroll'
   | 'payroll_employees'
   | 'payroll_periods'
+  // Empleados
+  | 'employees'             
   // Catálogos
   | 'users'
   | 'units'
@@ -40,7 +42,6 @@ export type Resource =
   | 'tax_entities'
   // Ajustes
   | 'settings';
-
 // ── Subdocumentos ──────────────────────────────────────────────────────────
 
 export interface Permission {

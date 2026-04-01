@@ -32,6 +32,8 @@ const resourceSchema = z.enum([
   'payroll',
   'payroll_employees',
   'payroll_periods',
+  // Empleados
+  'employees',             
   // Catálogos
   'users',
   'units',
