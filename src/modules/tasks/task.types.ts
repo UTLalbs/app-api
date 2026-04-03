@@ -35,8 +35,9 @@ export interface TaskDocument {
   description:  string;
   priority:     TaskPriority;
   area:         TaskArea;
+  createdBy:    ObjectId;           
   assignedTo:   ObjectId | null;
-  assignedBy:   ObjectId;
+  assignedBy:   ObjectId | null;    
   participants: ObjectId[];
   status:       TaskStatus;
   entity:       string;
@@ -61,8 +62,9 @@ export interface Task {
   description:  string;
   priority:     TaskPriority;
   area:         TaskArea;
+  createdBy:    PopulatedUser | null;   
   assignedTo:   PopulatedUser | null;
-  assignedBy:   string;
+  assignedBy:   PopulatedUser | null;   
   participants: PopulatedUser[];
   status:       TaskStatus;
   entity:       string;
@@ -76,7 +78,6 @@ export interface Task {
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
-
 export interface CreateTaskDto {
   orgId:        string | null;
   type:         TaskType;
@@ -86,8 +87,9 @@ export interface CreateTaskDto {
   description:  string;
   priority:     TaskPriority;
   area:         TaskArea;
+  createdBy:    string;            
   assignedTo?:  string | null;
-  assignedBy:   string;
+  assignedBy?:  string | null;    
   participants?: string[];
   status:       TaskStatus;
   entity:       string;

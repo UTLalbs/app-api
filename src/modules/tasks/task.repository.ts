@@ -57,9 +57,11 @@ async function toTask(
 	doc: TaskDocument,
 	options: {populateAssignedTo?: boolean; populateParticipants?: boolean} = {},
 ): Promise<Task> {
+	const createdBy = await populateUser(doc.createdBy);
 	const assignedTo = options.populateAssignedTo
 		? await populateUser(doc.assignedTo)
 		: null;
+	const assignedBy = await populateUser(doc.assignedBy ?? null); // ← puede ser null
 
 	const participants = options.populateParticipants
 		? await populateUsers(doc.participants)
@@ -75,8 +77,9 @@ async function toTask(
 		description: doc.description,
 		priority: doc.priority,
 		area: doc.area,
+		createdBy,
 		assignedTo,
-		assignedBy: doc.assignedBy.toHexString(),
+		assignedBy,
 		participants,
 		status: doc.status,
 		entity: doc.entity,
@@ -141,8 +144,9 @@ export async function createTask(dto: CreateTaskDto): Promise<Task> {
 		description: dto.description,
 		priority: dto.priority,
 		area: dto.area,
+		createdBy: new ObjectId(dto.createdBy), 
 		assignedTo: dto.assignedTo ? new ObjectId(dto.assignedTo) : null,
-		assignedBy: new ObjectId(dto.assignedBy),
+		assignedBy: dto.assignedBy ? new ObjectId(dto.assignedBy) : null, 
 		participants: allParticipantIds,
 		status: dto.status,
 		entity: dto.entity,

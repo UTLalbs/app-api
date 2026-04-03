@@ -70,18 +70,23 @@ export const getTasks = asyncHandler(
 
 export const createTask = asyncHandler(
   async (req: Request & CreateTaskInput, res: Response) => {
+    const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? null;
+
     const { task, isDuplicate } = await submitTask(
       {
-        orgId:        req.user!.orgId ?? null,
+        orgId,
         type:         req.body.type,
-        source:       'user',
+        source:       req.body.source ?? 'user',
         sourceId:     req.body.sourceId ?? null,
         title:        req.body.title,
         description:  req.body.description,
         priority:     req.body.priority,
         area:         req.body.area,
+        createdBy:    req.user!.id,               
         assignedTo:   req.body.assignedTo ?? null,
-        assignedBy:   req.user!.id,
+        assignedBy:   req.body.assignedTo           
+          ? req.user!.id
+          : null,
         participants: req.body.participants ?? [],
         status:       'open',
         entity:       req.body.entity,
@@ -100,7 +105,6 @@ export const createTask = asyncHandler(
     });
   },
 );
-
 // ── GET /api/v1/tasks/:id ──────────────────────────────────────────────────
 
 export const getTaskById = asyncHandler(

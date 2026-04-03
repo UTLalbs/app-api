@@ -62,6 +62,20 @@ export async function submitTask(
 
 	const task = await createTask(dto);
 
+	// Notificar al asignado — solo si assignedBy es diferente al createdBy
+	if (dto.assignedTo) {
+		await createNotification({
+			userId: dto.assignedTo,
+			orgId: dto.orgId,
+			type: "assignment",
+			taskId: task.id,
+			taskTitle: task.title,
+			message: `${actorName} te asignó el task: ${task.title}`,
+			fromUserId: dto.assignedBy ?? dto.createdBy,
+			fromUserName: actorName,
+		});
+	}
+
 	logger.info(
 		{taskId: task.id, type: task.type, priority: task.priority},
 		"Task created",
@@ -140,16 +154,25 @@ export async function editTask(
 	if (!before) throw new NotFoundError("Task");
 
 	const updated = await updateTask(id, dto);
-
 	if (!updated) throw new NotFoundError("Task");
 
+	// ── Notificar al resolver ──────────────────────────────────────────────
 	if (dto.status === "resolved") {
 		const notifyIds: string[] = [];
 
 		if (updated.assignedTo) notifyIds.push(updated.assignedTo.id);
 
-		const assignedByStr = before.assignedBy.toHexString();
-		if (!notifyIds.includes(assignedByStr)) notifyIds.push(assignedByStr);
+		// assignedBy puede ser null
+		const assignedByStr = before.assignedBy?.toHexString();
+		if (assignedByStr && !notifyIds.includes(assignedByStr)) {
+			notifyIds.push(assignedByStr);
+		}
+
+		// Notificar también al createdBy
+		const createdByStr = before.createdBy.toHexString();
+		if (!notifyIds.includes(createdByStr)) {
+			notifyIds.push(createdByStr);
+		}
 
 		await Promise.all(
 			notifyIds.map((userId) =>
@@ -167,29 +190,41 @@ export async function editTask(
 		);
 	}
 
-	// Notificar cambio de asignado
+	// ── Notificar cambio de asignado ───────────────────────────────────────
 	const assignedToChanged =
 		dto.assignedTo !== undefined &&
 		dto.assignedTo !== before.assignedTo?.toHexString();
 
-	if (assignedToChanged && dto.assignedTo) {
-		await createNotification({
-			userId: dto.assignedTo,
-			orgId: updated.orgId,
-			type: "assignment",
-			taskId: updated.id,
-			taskTitle: updated.title,
-			message: `${actorName} te asignó el task: ${updated.title}`,
-			fromUserId: actorId,
-			fromUserName: actorName,
-		});
+	if (assignedToChanged) {
+		// Actualizar assignedBy = actor actual en MongoDB
+		const {getTaskCollection} = await import("./task.model");
+		const {ObjectId} = await import("mongodb");
+
+		await getTaskCollection().updateOne(
+			{_id: new ObjectId(id)},
+			{$set: {assignedBy: new ObjectId(actorId), updatedAt: new Date()}},
+		);
+
+		if (dto.assignedTo) {
+			await createNotification({
+				userId: dto.assignedTo,
+				orgId: updated.orgId,
+				type: "assignment",
+				taskId: updated.id,
+				taskTitle: updated.title,
+				message: `${actorName} te asignó el task: ${updated.title}`,
+				fromUserId: actorId,
+				fromUserName: actorName,
+			});
+		}
 	}
 
-	// Notificar cambio de status al asignado y participants
+	// ── Notificar cambio de status al asignado y participants ──────────────
 	const statusChanged =
 		dto.status !== undefined && dto.status !== before.status;
 
-	if (statusChanged) {
+	if (statusChanged && dto.status !== "resolved") {
+		// resolved ya se notificó arriba con mensaje diferente
 		const notifyUserIds: string[] = [];
 
 		if (updated.assignedTo) notifyUserIds.push(updated.assignedTo.id);
