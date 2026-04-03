@@ -1,5 +1,6 @@
 import {ObjectId} from "mongodb";
 
+import {getOrganizationCollection} from "../organizations/organization.model";
 import {getUserCollection} from "../users/user.model";
 import {findSuperAdmins} from "../users/user.repository";
 
@@ -34,6 +35,19 @@ async function populateUser(
 	};
 }
 
+// ── Helper — obtener org name ──────────────────────────────────────────────
+
+async function getOrgName(orgId: ObjectId | null): Promise<string | null> {
+	if (!orgId) return null;
+
+	const org = await getOrganizationCollection().findOne(
+		{_id: orgId},
+		{projection: {name: 1}},
+	);
+
+	return org?.name ?? null;
+}
+
 async function populateUsers(userIds: ObjectId[]): Promise<PopulatedUser[]> {
 	if (userIds.length === 0) return [];
 
@@ -57,11 +71,15 @@ async function toTask(
 	doc: TaskDocument,
 	options: {populateAssignedTo?: boolean; populateParticipants?: boolean} = {},
 ): Promise<Task> {
-	const createdBy = await populateUser(doc.createdBy);
-	const assignedTo = options.populateAssignedTo
-		? await populateUser(doc.assignedTo)
-		: null;
-	const assignedBy = await populateUser(doc.assignedBy ?? null); // ← puede ser null
+	// Poblar todos los usuarios en paralelo
+	const [createdBy, assignedTo, assignedBy, orgName] = await Promise.all([
+		populateUser(doc.createdBy),
+		options.populateAssignedTo
+			? populateUser(doc.assignedTo)
+			: Promise.resolve(null),
+		populateUser(doc.assignedBy ?? null),
+		getOrgName(doc.orgId),
+	]);
 
 	const participants = options.populateParticipants
 		? await populateUsers(doc.participants)
@@ -70,6 +88,7 @@ async function toTask(
 	return {
 		id: doc._id.toHexString(),
 		orgId: doc.orgId ? doc.orgId.toHexString() : null,
+		orgName, 
 		type: doc.type,
 		source: doc.source,
 		sourceId: doc.sourceId,
@@ -144,9 +163,9 @@ export async function createTask(dto: CreateTaskDto): Promise<Task> {
 		description: dto.description,
 		priority: dto.priority,
 		area: dto.area,
-		createdBy: new ObjectId(dto.createdBy), 
+		createdBy: new ObjectId(dto.createdBy),
 		assignedTo: dto.assignedTo ? new ObjectId(dto.assignedTo) : null,
-		assignedBy: dto.assignedBy ? new ObjectId(dto.assignedBy) : null, 
+		assignedBy: dto.assignedBy ? new ObjectId(dto.assignedBy) : null,
 		participants: allParticipantIds,
 		status: dto.status,
 		entity: dto.entity,
