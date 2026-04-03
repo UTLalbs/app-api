@@ -24,8 +24,16 @@ export class AppError extends Error {
 }
 
 export class ValidationError extends AppError {
-  constructor(details?: unknown) {
-    super('Validation failed', 400, 'VALIDATION_ERROR', details);
+  constructor(message: string | { field: string; message: string }[]) {
+    const mainMessage = Array.isArray(message)
+      ? message[0]?.message ?? 'Validation error'
+      : message;
+
+    const details = Array.isArray(message)
+      ? message
+      : [{ field: '', message }];
+
+    super(mainMessage, 400, 'VALIDATION_ERROR', details);
   }
 }
 
