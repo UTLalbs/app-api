@@ -52,7 +52,18 @@ const addressSchema = z.object({
 const regimenFiscalSchema = z.object({
   code: z.string().min(1),
   name: z.string().min(1),
+} );
+
+// ── Validación de dirección actual con lógica sameAsFiscal ─────────────────
+const currentAddressSchema = z.object({
+  sameAsFiscal: z.boolean().default(true),
+  address:      addressSchema.nullable().optional(),
+}).transform((val) => {
+  // Si sameAsFiscal = true → address siempre null
+  if (val.sameAsFiscal) return { sameAsFiscal: true, address: null };
+  return val;
 });
+
 
 // ── Employee profile patch ─────────────────────────────────────────────────
 
@@ -69,7 +80,8 @@ export const updateEmployeeProfileSchema = z.object({
     rfc:               z.string().max(13).nullable().optional(),
     razonSocial:       z.string().max(200).nullable().optional(),
     regimenFiscal:     regimenFiscalSchema.nullable().optional(),
-    address:           addressSchema.nullable().optional(),
+    address: addressSchema.nullable().optional(),
+    currentAddress: currentAddressSchema.optional(),
   }),
 });
 
@@ -240,7 +252,9 @@ export const auditLogQuerySchema = z.object({
     to:    z.string().datetime().optional(),
     limit: z.coerce.number().min(1).max(200).default(50),
   }),
-});
+} );
+
+
 
 // ── Tipos inferidos ────────────────────────────────────────────────────────
 

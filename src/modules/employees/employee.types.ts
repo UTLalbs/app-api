@@ -242,7 +242,17 @@ export interface AuditLogEntry {
   newValue:  unknown;
   changedBy: ObjectId;
   changedAt: Date;
-  reason:    string | null;
+  reason: string | null;
+  
+
+
+}
+
+// ── Subdocumento — Current Address ────────────────────────────────────────
+
+export interface CurrentAddress {
+  sameAsFiscal: boolean;
+  address:      EmployeeAddress | null;
 }
 
 // ── Employee Profile completo ──────────────────────────────────────────────
@@ -259,7 +269,8 @@ export interface EmployeeProfile {
   rfc:               string | null;
   razonSocial:       string | null;
   regimenFiscal:     { code: string; name: string } | null;
-  address:           EmployeeAddress | null;
+  address: EmployeeAddress | null;
+  currentAddress: CurrentAddress | null;
   emergencyContacts: EmergencyContact[];
   bankAccounts:      BankAccount[];
   vehicleOperator:   VehicleOperator | null;

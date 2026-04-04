@@ -95,6 +95,10 @@ function toUser(doc: UserDocument): User {
 					documents: doc.employeeProfile.documents ?? [],
 					checklist: doc.employeeProfile.checklist ?? [],
 					auditLog: doc.employeeProfile.auditLog ?? [],
+					currentAddress: doc.employeeProfile.currentAddress ?? {
+						sameAsFiscal: true,
+						address: null,
+					},
 				}
 			: null,
 		clientMemberships: doc.clientMemberships
