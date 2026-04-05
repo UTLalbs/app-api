@@ -90,7 +90,8 @@ export interface DriverLicense {
   class:     'A' | 'B' | 'C' | 'D' | 'E';
   issuedAt:  Date;
   expiresAt: Date;
-  state:     string | null;
+  state: string | null;
+  country: 'MX' | 'US';
   fileUrl:   string | null;
   alertDays: number;
 }

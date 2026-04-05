@@ -69,7 +69,10 @@ const EMPLOYEE_PROJECTION = {
 } as const;
 // ── Conversión ─────────────────────────────────────────────────────────────
 
-function toUser(doc: UserDocument): User {
+function toUser ( doc: UserDocument ): User
+{
+	const ep = doc.employeeProfile;
+
 	return {
 		id: doc._id.toHexString(),
 		orgId: doc.orgId ? doc.orgId.toHexString() : null,
@@ -86,21 +89,21 @@ function toUser(doc: UserDocument): User {
 			roleId: r.roleId.toHexString(),
 			name: r.name,
 		})),
-		employeeProfile: doc.employeeProfile
-			? {
-					...doc.employeeProfile,
-					emergencyContacts: doc.employeeProfile.emergencyContacts ?? [],
-					bankAccounts: doc.employeeProfile.bankAccounts ?? [],
-					documents: doc.employeeProfile.documents ?? [],
-					checklist: doc.employeeProfile.checklist ?? [],
-					auditLog: doc.employeeProfile.auditLog ?? [],
-					currentAddress: doc.employeeProfile.currentAddress ?? {
-						sameAsFiscal: true,
-						address: null,
-					},
-					vehicleOperator: doc.employeeProfile.vehicleOperator ?? null,
-				}
-			: null,
+		employeeProfile: ep
+      ? {
+          ...ep,
+          emergencyContacts: Array.isArray(ep.emergencyContacts) ? ep.emergencyContacts : [],
+          bankAccounts:      Array.isArray(ep.bankAccounts)      ? ep.bankAccounts      : [],
+          documents:         Array.isArray(ep.documents)         ? ep.documents         : [],
+          checklist:         Array.isArray(ep.checklist)         ? ep.checklist         : [],
+          auditLog:          Array.isArray(ep.auditLog)          ? ep.auditLog          : [],
+          vehicleOperator:   ep.vehicleOperator ?? null,
+          currentAddress:    ep.currentAddress ?? {
+            sameAsFiscal: true,
+            address:      null,
+          },
+        }
+      : null,
 		clientMemberships: doc.clientMemberships
 			? doc.clientMemberships.map((m) => ({
 					clientId: m.clientId.toHexString(),
