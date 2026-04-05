@@ -25,6 +25,7 @@ const documentTypeSchema = z.enum([
   'employment_contract', 'internal_regulations',
   'employment_application', 'proof_of_address',
   'background_check', 'tax_certificate',
+  'bank_account',
   'socioeconomic_study', 'federal_license',
   'state_license', 'sct_medical_exam',
   'company_medical_exam', 'drug_test_mx',
@@ -72,7 +73,8 @@ const driverLicenseSchema = z.object({
   class:     z.enum(['A', 'B', 'C', 'D', 'E']),
   issuedAt:  z.coerce.date(),
   expiresAt: z.coerce.date(),
-  state:     z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  country: z.enum(['MX', 'US']).default('MX'),
   fileUrl:   z.string().url().nullable().optional(),
   alertDays: z.coerce.number().default(30),
 });

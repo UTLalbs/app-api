@@ -42,6 +42,7 @@ export type DocumentType =
   | 'proof_of_address'
   | 'background_check'
   | 'tax_certificate'
+  | 'bank_account'
   | 'socioeconomic_study'
   | 'federal_license'
   | 'state_license'
