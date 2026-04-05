@@ -62,6 +62,104 @@ const currentAddressSchema = z.object({
   // Si sameAsFiscal = true → address siempre null
   if (val.sameAsFiscal) return { sameAsFiscal: true, address: null };
   return val;
+} );
+
+// ── Vehicle Operator ───────────────────────────────────────────────────────
+
+const driverLicenseSchema = z.object({
+  type:      z.enum(['federal', 'estatal', 'utilitaria']),
+  number:    z.string().min(1),
+  class:     z.enum(['A', 'B', 'C', 'D', 'E']),
+  issuedAt:  z.coerce.date(),
+  expiresAt: z.coerce.date(),
+  state:     z.string().nullable().optional(),
+  fileUrl:   z.string().url().nullable().optional(),
+  alertDays: z.coerce.number().default(30),
+});
+
+const medicalExamSchema = z.object({
+  number:        z.string().min(1),
+  issuedAt:      z.coerce.date(),
+  expiresAt:     z.coerce.date(),
+  result:        z.enum(['apto', 'apto_con_restricciones', 'no_apto']),
+  restrictions:  z.string().nullable().optional(),
+  issuedBy:      z.string().min(1),
+  licenseNumber: z.string().min(1),
+  fileUrl:       z.string().url().nullable().optional(),
+  alertDays:     z.coerce.number().default(30),
+});
+
+const drugTestSchema = z.object({
+  date:       z.coerce.date(),
+  result:     z.enum(['negative', 'positive', 'pending']),
+  laboratory: z.string().min(1),
+  fileUrl:    z.string().url().nullable().optional(),
+  alertDays:  z.coerce.number().default(30),
+});
+
+const passportSchema = z.object({
+  number:    z.string().min(1),
+  issuedAt:  z.coerce.date(),
+  expiresAt: z.coerce.date(),
+  country:   z.string().default('MEX'),
+  fileUrl:   z.string().url().nullable().optional(),
+  alertDays: z.coerce.number().default(30),
+});
+
+const visaSchema = z.object({
+  type:      z.enum(['B1/B2', 'FM3', 'other']),
+  number:    z.string().min(1),
+  issuedAt:  z.coerce.date(),
+  expiresAt: z.coerce.date(),
+  fileUrl:   z.string().url().nullable().optional(),
+  alertDays: z.coerce.number().default(30),
+});
+
+const fastCardSchema = z.object({
+  number:    z.string().min(1),
+  issuedAt:  z.coerce.date(),
+  expiresAt: z.coerce.date(),
+  fileUrl:   z.string().url().nullable().optional(),
+  alertDays: z.coerce.number().default(30),
+});
+
+const fmcsaSchema = z.object({
+  cdlNumber: z.string().nullable().optional(),
+  dotPhysical: z.object({
+    issuedAt:  z.coerce.date(),
+    expiresAt: z.coerce.date(),
+    issuedBy:  z.string().min(1),
+    fileUrl:   z.string().url().nullable().optional(),
+    alertDays: z.coerce.number().default(30),
+  }).nullable().optional(),
+  drugTest: drugTestSchema.nullable().optional(),
+  alcoholTest: z.object({
+    date:       z.coerce.date(),
+    result:     z.enum(['negative', 'positive', 'pending']),
+    laboratory: z.string().min(1),
+    fileUrl:    z.string().url().nullable().optional(),
+  }).nullable().optional(),
+  mvrReport: z.object({
+    date:    z.coerce.date(),
+    fileUrl: z.string().url().nullable().optional(),
+  }).nullable().optional(),
+  pspReport: z.object({
+    date:    z.coerce.date(),
+    fileUrl: z.string().url().nullable().optional(),
+  }).nullable().optional(),
+}).nullable().optional();
+
+const vehicleOperatorSchema = z.object({
+  isOperator:    z.boolean().default(false),
+  driverStatus:  driverStatusSchema.nullable().optional(),
+  currentUnitId: z.string().length(24).nullable().optional(),
+  licenses:      z.array(driverLicenseSchema).default([]),
+  medicalExam:   medicalExamSchema.nullable().optional(),
+  drugTestMx:    drugTestSchema.nullable().optional(),
+  passport:      passportSchema.nullable().optional(),
+  visa:          visaSchema.nullable().optional(),
+  fastCard:      fastCardSchema.nullable().optional(),
+  fmcsa:         fmcsaSchema,
 });
 
 
@@ -82,6 +180,7 @@ export const updateEmployeeProfileSchema = z.object({
     regimenFiscal:     regimenFiscalSchema.nullable().optional(),
     address: addressSchema.nullable().optional(),
     currentAddress: currentAddressSchema.optional(),
+    vehicleOperator:   vehicleOperatorSchema.nullable().optional(),
   }),
 });
 

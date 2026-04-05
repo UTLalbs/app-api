@@ -41,7 +41,6 @@ const EMPLOYEE_PROJECTION = {
 	lastLoginAt: 1,
 	createdAt: 1,
 	updatedAt: 1,
-	// employeeProfile sin auditLog ni bankAccounts encriptados
 	"employeeProfile.isEmployee": 1,
 	"employeeProfile.employeeType": 1,
 	"employeeProfile.position": 1,
@@ -54,11 +53,12 @@ const EMPLOYEE_PROJECTION = {
 	"employeeProfile.razonSocial": 1,
 	"employeeProfile.regimenFiscal": 1,
 	"employeeProfile.address": 1,
+	"employeeProfile.currentAddress": 1,
 	"employeeProfile.emergencyContacts": 1,
-	"employeeProfile.vehicleOperator": 1,
+	"employeeProfile.vehicleOperator": 1, // ← agregar explícitamente
 	"employeeProfile.documents": 1,
 	"employeeProfile.checklist": 1,
-	// bankAccounts solo lastFour, bankName, isDefault — sin datos encriptados
+	// bankAccounts — solo campos seguros
 	"employeeProfile.bankAccounts._id": 1,
 	"employeeProfile.bankAccounts.bankName": 1,
 	"employeeProfile.bankAccounts.lastFour": 1,
@@ -67,7 +67,6 @@ const EMPLOYEE_PROJECTION = {
 	"employeeProfile.bankAccounts.createdAt": 1,
 	// auditLog excluido por default
 } as const;
-
 // ── Conversión ─────────────────────────────────────────────────────────────
 
 function toUser(doc: UserDocument): User {
@@ -99,6 +98,7 @@ function toUser(doc: UserDocument): User {
 						sameAsFiscal: true,
 						address: null,
 					},
+					vehicleOperator: doc.employeeProfile.vehicleOperator ?? null,
 				}
 			: null,
 		clientMemberships: doc.clientMemberships
