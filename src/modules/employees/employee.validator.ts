@@ -278,7 +278,7 @@ export const uploadDocumentSchema = z.object({
     name:      z.string().min(1).max(200),
     issuedAt:  z.string().datetime().nullable().optional(),
     expiresAt: z.string().datetime().nullable().optional(),
-    alertDays: z.coerce.number().min(1).max(365).default(30),
+    alertDays: z.coerce.number().min(0).max(365).default(0),
   }),
 });
 

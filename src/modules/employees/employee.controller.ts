@@ -206,12 +206,16 @@ export const uploadEmployeeDocument = asyncHandler(
 			return;
 		}
 
+		const alertDays = Number(req.body.alertDays) || 0;
+		const issuedAt = req.body.issuedAt ? new Date(req.body.issuedAt) : null;
+		const expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+
 		const doc = await uploadDocument(String(req.params.id), orgId, req.file, {
 			type: req.body.type,
 			name: req.body.name,
-			issuedAt: req.body.issuedAt ? new Date(req.body.issuedAt) : null,
-			expiresAt: req.body.expiresAt ? new Date(req.body.expiresAt) : null,
-			alertDays: Number(req.body.alertDays) || 30,
+			issuedAt,
+			expiresAt,
+			alertDays,
 		});
 
 		res.status(201).json({success: true, data: doc});
