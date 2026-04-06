@@ -25,8 +25,15 @@ export type EmployeeDepartment =
   | 'security'
   | 'human_resources';
 
+export type EmploymentStatus  = 'active' | 'leave' | 'terminated';
+export type DriverStatus      = 'available' | 'on_trip' | 'off_duty';
+export type DocumentStatus    = 'pending' | 'verified' | 'expired' | 'rejected';
+export type ChecklistStatus   = 'pending' | 'complete' | 'waived' | 'expired';
+export type DrugTestResult    = 'negative' | 'positive' | 'pending';
+export type MedicalResult     = 'apto' | 'apto_con_restricciones' | 'no_apto';
+export type RenewalFrom       = 'upload_date' | 'expiry_date';
 
-  export type WaivedReason =
+export type WaivedReason =
   | 'not_applicable'
   | 'pending_process'
   | 'foreign_employee'
@@ -34,13 +41,17 @@ export type EmployeeDepartment =
   | 'director_approval'
   | 'other';
 
-
-export type EmploymentStatus = 'active' | 'leave' | 'terminated';
-export type DriverStatus     = 'available' | 'on_trip' | 'off_duty';
-export type DocumentStatus   = 'pending' | 'verified' | 'expired' | 'rejected';
-export type ChecklistStatus = 'pending' | 'complete' | 'waived' | 'expired';
-export type DrugTestResult   = 'negative' | 'positive' | 'pending';
-export type MedicalResult    = 'apto' | 'apto_con_restricciones' | 'no_apto';
+export type AuditAction =
+  | 'document_uploaded'
+  | 'document_verified'
+  | 'document_rejected'
+  | 'document_deleted'
+  | 'document_replaced'
+  | 'item_waived'
+  | 'item_restored'
+  | 'alert_configured'
+  | 'date_edited'
+  | 'item_added';
 
 export type DocumentType =
   | 'ine'
@@ -63,12 +74,13 @@ export type DocumentType =
   | 'dot_physical'
   | 'passport'
   | 'visa'
-  | 'customs_badge'            
+  | 'customs_badge'
   | 'fast_card'
   | 'mvr_report'
   | 'psp_report'
   | 'technical_certification'
   | 'other';
+
 // ── Subdocumentos — Emergency Contact ─────────────────────────────────────
 
 export interface EmergencyContact {
@@ -86,7 +98,7 @@ export interface BankAccount {
   bankName:      string;
   accountNumber: string;   // AES-256 encrypted
   clabe:         string;   // AES-256 encrypted
-  lastFour:      string;   // últimos 4 dígitos, sin encriptar
+  lastFour:      string;
   documentUrl:   string | null;
   isDefault:     boolean;
   createdAt:     Date;
@@ -101,22 +113,22 @@ export interface DriverLicense {
   class:     'A' | 'B' | 'C' | 'D' | 'E';
   issuedAt:  Date;
   expiresAt: Date;
-  state: string | null;
-  country: 'MX' | 'US';
+  state:     string | null;
+  country:   'MX' | 'US';
   fileUrl:   string | null;
   alertDays: number;
 }
 
 export interface MedicalExam {
-  number:       string;
-  issuedAt:     Date;
-  expiresAt:    Date;
-  result:       MedicalResult;
-  restrictions: string | null;
-  issuedBy:     string;
+  number:        string;
+  issuedAt:      Date;
+  expiresAt:     Date;
+  result:        MedicalResult;
+  restrictions:  string | null;
+  issuedBy:      string;
   licenseNumber: string;
-  fileUrl:      string | null;
-  alertDays:    number;
+  fileUrl:       string | null;
+  alertDays:     number;
 }
 
 export interface DrugTest {
@@ -214,21 +226,26 @@ export interface DocumentVersion {
 }
 
 export interface EmployeeDocument {
-  _id:              ObjectId;
-  type:             DocumentType;
-  name:             string;
-  fileUrl:          string;
-  fileSize:         number;
-  mimeType:         string;
-  issuedAt:         Date | null;
-  expiresAt:        Date | null;
-  alertDays:        number;
-  verifiedAt:       Date | null;
-  verifiedBy:       ObjectId | null;
-  status:           DocumentStatus;
-  notes:            string | null;
-  uploadedAt:       Date;
-  previousVersions: DocumentVersion[];
+  _id:               ObjectId;
+  type:              DocumentType;
+  name:              string;
+  fileUrl:           string;
+  fileSize:          number;
+  mimeType:          string;
+  issuedAt:          Date | null;
+  expiresAt:         Date | null;
+  alertDays:         number;
+  hasRenewal:        boolean;          // ← nuevo
+  renewalMonths:     number | null;    // ← nuevo
+  renewalFrom:       RenewalFrom;      // ← nuevo
+  renewalStartDate:  Date | null;      // ← nuevo
+  replacedBy:        ObjectId | null;  // ← nuevo
+  verifiedAt:        Date | null;
+  verifiedBy:        ObjectId | null;
+  status:            DocumentStatus;
+  notes:             string | null;
+  uploadedAt:        Date;
+  previousVersions:  DocumentVersion[];
 }
 
 // ── Subdocumentos — Checklist ──────────────────────────────────────────────
@@ -244,6 +261,7 @@ export interface ChecklistItem {
   alertDays:     number | null;
   hasRenewal:    boolean;
   renewalMonths: number | null;
+  renewalFrom:   RenewalFrom;          // ← nuevo
   lastRenewedAt: Date | null;
   waivedBy:      ObjectId | null;
   waivedAt:      Date | null;
@@ -254,23 +272,24 @@ export interface ChecklistItem {
 // ── Subdocumentos — Audit Log ──────────────────────────────────────────────
 
 export interface AuditLogEntry {
-  _id:       ObjectId;
-  field:     string;
-  oldValue:  unknown;
-  newValue:  unknown;
-  changedBy: ObjectId;
-  changedAt: Date;
-  reason: string | null;
-  
-
-
+  _id:        ObjectId;
+  action:     AuditAction;
+  entityId:   string;
+  entityType: 'document' | 'checklist_item';
+  changedBy:  ObjectId;
+  changedAt:  Date;
+  metadata:   Record<string, unknown>;
 }
 
-// ── Subdocumento — Current Address ────────────────────────────────────────
+// ── Populated types ────────────────────────────────────────────────────────
 
-export interface CurrentAddress {
-  sameAsFiscal: boolean;
-  address:      EmployeeAddress | null;
+export interface PopulatedUser {
+  id:          string;
+  displayName: string;
+}
+
+export interface ChecklistItemPopulated extends Omit<ChecklistItem, 'waivedBy'> {
+  waivedBy: PopulatedUser | null;
 }
 
 // ── Employee Profile completo ──────────────────────────────────────────────
@@ -287,8 +306,8 @@ export interface EmployeeProfile {
   rfc:               string | null;
   razonSocial:       string | null;
   regimenFiscal:     { code: string; name: string } | null;
-  address: EmployeeAddress | null;
-  currentAddress: CurrentAddress | null;
+  address:           EmployeeAddress | null;
+  currentAddress:    CurrentAddress;
   emergencyContacts: EmergencyContact[];
   bankAccounts:      BankAccount[];
   vehicleOperator:   VehicleOperator | null;
@@ -300,25 +319,32 @@ export interface EmployeeProfile {
 // ── Address ────────────────────────────────────────────────────────────────
 
 export interface EmployeeAddress {
-  street:   string;
-  numExt:   string;
-  numInt:   string;
-  suburb:   { name: string; code: string };
-  town:     { name: string; code: string };
-  state:    { name: string; code: string };
-  location: { name: string; code: string };
-  city:     { name: string; code: string };
-  country:  { name: string; code: string };
-  cp:       string;
+  street:    string;
+  numExt:    string;
+  numInt:    string;
+  suburb:    { name: string; code: string };
+  town:      { name: string; code: string };
+  state:     { name: string; code: string };
+  location:  { name: string; code: string };
+  city:      { name: string; code: string };
+  country:   { name: string; code: string };
+  cp:        string;
   reference?: string;
 }
 
-// ── Checklist Templates ────────────────────────────────────────────────────
+export interface CurrentAddress {
+  sameAsFiscal: boolean;
+  address:      EmployeeAddress | null;
+}
+
+// ── Checklist Template ─────────────────────────────────────────────────────
 
 export interface ChecklistTemplate {
-  type:     DocumentType;
-  label:    string;
-  required: boolean;
+  type:       string;
+  label:      string;
+  required:   boolean;
+  hasExpiry:  boolean;
+  hasRenewal: boolean;
 }
 
 // ── Query Filter ───────────────────────────────────────────────────────────

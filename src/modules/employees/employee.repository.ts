@@ -18,6 +18,7 @@ import type {
 	EmployeeDocument,
 	EmployeeProfile,
 	EmployeeQueryFilter,
+	RenewalFrom,
 } from "./employee.types";
 
 // ── Proyección base para employees ────────────────────────────────────────
@@ -422,77 +423,112 @@ export async function removeBankAccount(
 // ── Documents ──────────────────────────────────────────────────────────────
 
 export async function addEmployeeDocument(
-	id: string,
-	orgId: string,
-	doc: Omit<EmployeeDocument, "_id">,
+  id: string,
+  orgId: string,
+  doc: Omit<EmployeeDocument, '_id'>,
 ): Promise<EmployeeDocument | null> {
-	if (!ObjectId.isValid(id)) return null;
+  if (!ObjectId.isValid(id)) return null;
 
-	const newDoc: EmployeeDocument = {_id: new ObjectId(), ...doc};
+  const newDoc: EmployeeDocument = { _id: new ObjectId(), ...doc };
 
-	// Actualizar checklist si existe item con mismo type
-	await getUserCollection().updateOne(
-		{
-			_id: new ObjectId(id),
-			orgId: new ObjectId(orgId),
-			"employeeProfile.checklist.type": doc.type,
-		},
-		{
-			$set: {
-				"employeeProfile.checklist.$.status": "complete",
-				"employeeProfile.checklist.$.documentId": newDoc._id,
-				updatedAt: new Date(),
-			},
-		},
-	);
+  // Verificar si existe documento con mismo type — marcar como reemplazado
+  const existing = await getUserCollection().findOne(
+    {
+      _id:   new ObjectId(id),
+      orgId: new ObjectId(orgId),
+      'employeeProfile.documents.type': doc.type,
+    },
+    { projection: { 'employeeProfile.documents.$': 1 } },
+  );
 
-	await getUserCollection().updateOne(
-		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
-		{
-			$push: {"employeeProfile.documents": newDoc},
-			$set: {updatedAt: new Date()},
-		},
-	);
+  const existingDoc = existing?.employeeProfile?.documents?.[0];
 
-	return newDoc;
+  if (existingDoc) {
+    // Marcar documento anterior como reemplazado
+    await getUserCollection().updateOne(
+      {
+        _id:   new ObjectId(id),
+        orgId: new ObjectId(orgId),
+        'employeeProfile.documents._id': existingDoc._id,
+      },
+      {
+        $set: {
+          'employeeProfile.documents.$.replacedBy': newDoc._id,
+          updatedAt: new Date(),
+        },
+      },
+    );
+  }
+
+  // Actualizar checklist si existe item con mismo type
+  await getUserCollection().updateOne(
+    {
+      _id:   new ObjectId(id),
+      orgId: new ObjectId(orgId),
+      'employeeProfile.checklist.type': doc.type,
+    },
+    {
+      $set: {
+        'employeeProfile.checklist.$.status':        'complete',
+        'employeeProfile.checklist.$.documentId':    newDoc._id,
+        'employeeProfile.checklist.$.lastRenewedAt': new Date(),
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  // Agregar nuevo documento
+  await getUserCollection().updateOne(
+    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
+    {
+      $push: { 'employeeProfile.documents': newDoc },
+      $set:  { updatedAt: new Date() },
+    },
+  );
+
+  return newDoc;
 }
 
 export async function updateEmployeeDocument(
-	id: string,
-	orgId: string,
-	docId: string,
-	fields: {
-		status?: DocumentStatus;
-		notes?: string | null;
-		expiresAt?: Date | null;
-		alertDays?: number;
-		verifiedAt?: Date | null;
-		verifiedBy?: ObjectId | null;
-	},
+  id: string,
+  orgId: string,
+  docId: string,
+  fields: {
+    status?:           DocumentStatus;
+    notes?:            string | null;
+    issuedAt?:         Date | null;
+    expiresAt?:        Date | null;
+    alertDays?:        number;
+    hasRenewal?:       boolean;
+    renewalMonths?:    number | null;
+    renewalFrom?:      RenewalFrom;
+    renewalStartDate?: Date | null;
+    verifiedAt?:       Date | null;
+    verifiedBy?:       ObjectId | null;
+  },
 ): Promise<User | null> {
-	if (!ObjectId.isValid(id) || !ObjectId.isValid(docId)) return null;
+  if (!ObjectId.isValid(id) || !ObjectId.isValid(docId)) return null;
 
-	const setFields: Record<string, unknown> = {updatedAt: new Date()};
+  const setFields: Record<string, unknown> = { updatedAt: new Date() };
 
-	for (const [key, value] of Object.entries(fields)) {
-		if (value !== undefined) {
-			setFields[`employeeProfile.documents.$.${key}`] = value;
-		}
-	}
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) {
+      setFields[`employeeProfile.documents.$.${key}`] = value;
+    }
+  }
 
-	const result = await getUserCollection().findOneAndUpdate(
-		{
-			_id: new ObjectId(id),
-			orgId: new ObjectId(orgId),
-			"employeeProfile.documents._id": new ObjectId(docId),
-		},
-		{$set: setFields},
-		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
-	);
+  const result = await getUserCollection().findOneAndUpdate(
+    {
+      _id:   new ObjectId(id),
+      orgId: new ObjectId(orgId),
+      'employeeProfile.documents._id': new ObjectId(docId),
+    },
+    { $set: setFields },
+    { returnDocument: 'after', projection: EMPLOYEE_PROJECTION },
+  );
 
-	return result ? toUser(result as UserDocument) : null;
+  return result ? toUser(result as UserDocument) : null;
 }
-
 export async function removeEmployeeDocument(
 	id: string,
 	orgId: string,
@@ -543,6 +579,7 @@ export async function removeEmployeeDocument(
 	return {fileUrl, previousVersions: previousVersionUrls};
 }
 
+
 // ── Checklist ──────────────────────────────────────────────────────────────
 
 export async function addChecklistItems(
@@ -567,41 +604,47 @@ export async function addChecklistItems(
 }
 
 export async function updateChecklistItem(
-	id: string,
-	orgId: string,
-	itemId: string,
-	fields: {
-		required?: boolean;
-		status?: ChecklistStatus;
-		documentId?: ObjectId | null;
-		waivedBy?: ObjectId | null;
-		waivedAt?: Date | null;
-		waivedReason?: string | null;
-	},
+  id: string,
+  orgId: string,
+  itemId: string,
+  fields: {
+    required?:     boolean;
+    status?:       ChecklistStatus;
+    documentId?:   ObjectId | null;
+    hasExpiry?:    boolean;
+    alertDays?:    number | null;
+    hasRenewal?:   boolean;
+    renewalMonths?: number | null;
+    renewalFrom?:  RenewalFrom;
+    lastRenewedAt?: Date | null;
+    waivedBy?:     ObjectId | null;
+    waivedAt?:     Date | null;
+    waivedReason?: string | null;
+    waivedNote?:   string | null;
+  },
 ): Promise<User | null> {
-	if (!ObjectId.isValid(id) || !ObjectId.isValid(itemId)) return null;
+  if (!ObjectId.isValid(id) || !ObjectId.isValid(itemId)) return null;
 
-	const setFields: Record<string, unknown> = {updatedAt: new Date()};
+  const setFields: Record<string, unknown> = { updatedAt: new Date() };
 
-	for (const [key, value] of Object.entries(fields)) {
-		if (value !== undefined) {
-			setFields[`employeeProfile.checklist.$.${key}`] = value;
-		}
-	}
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) {
+      setFields[`employeeProfile.checklist.$.${key}`] = value;
+    }
+  }
 
-	const result = await getUserCollection().findOneAndUpdate(
-		{
-			_id: new ObjectId(id),
-			orgId: new ObjectId(orgId),
-			"employeeProfile.checklist._id": new ObjectId(itemId),
-		},
-		{$set: setFields},
-		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
-	);
+  const result = await getUserCollection().findOneAndUpdate(
+    {
+      _id:   new ObjectId(id),
+      orgId: new ObjectId(orgId),
+      'employeeProfile.checklist._id': new ObjectId(itemId),
+    },
+    { $set: setFields },
+    { returnDocument: 'after', projection: EMPLOYEE_PROJECTION },
+  );
 
-	return result ? toUser(result as UserDocument) : null;
+  return result ? toUser(result as UserDocument) : null;
 }
-
 export async function removeChecklistItem(
 	id: string,
 	orgId: string,
@@ -623,35 +666,54 @@ export async function removeChecklistItem(
 // ── Audit Log ──────────────────────────────────────────────────────────────
 
 export async function findAuditLog(
-	id: string,
-	orgId: string,
-	filter: {field?: string; from?: Date; to?: Date; limit?: number},
+  id: string,
+  orgId: string,
+  filter: { action?: string; entityType?: string; from?: Date; to?: Date; limit?: number },
 ): Promise<AuditLogEntry[]> {
-	if (!ObjectId.isValid(id)) return [];
+  if (!ObjectId.isValid(id)) return [];
 
-	const doc = await getUserCollection().findOne(
-		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
-		{projection: {"employeeProfile.auditLog": 1}},
-	);
+  const doc = await getUserCollection().findOne(
+    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
+    { projection: { 'employeeProfile.auditLog': 1 } },
+  );
 
-	let entries = doc?.employeeProfile?.auditLog ?? [];
+  let entries = doc?.employeeProfile?.auditLog ?? [];
 
-	if (filter.field) {
-		entries = entries.filter((e) => e.field === filter.field);
-	}
+  if (filter.action) {
+    entries = entries.filter((e) => e.action === filter.action);
+  }
 
-	if (filter.from) {
-		entries = entries.filter((e) => e.changedAt >= filter.from!);
-	}
+  if (filter.entityType) {
+    entries = entries.filter((e) => e.entityType === filter.entityType);
+  }
 
-	if (filter.to) {
-		entries = entries.filter((e) => e.changedAt <= filter.to!);
-	}
+  if (filter.from) {
+    entries = entries.filter((e) => e.changedAt >= filter.from!);
+  }
 
-	// Ordenar desc y limitar
-	return entries
-		.sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime())
-		.slice(0, filter.limit ?? 50);
+  if (filter.to) {
+    entries = entries.filter((e) => e.changedAt <= filter.to!);
+  }
+
+  return entries
+    .sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime())
+    .slice(0, filter.limit ?? 50);
+}
+
+export async function addAuditEntry(
+  id: string,
+  orgId: string,
+  entry: Omit<AuditLogEntry, '_id'>,
+): Promise<void> {
+  if (!ObjectId.isValid(id)) return;
+
+  await getUserCollection().updateOne(
+    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
+    {
+      $push: { 'employeeProfile.auditLog': { _id: new ObjectId(), ...entry } },
+      $set:  { updatedAt: new Date() },
+    },
+  );
 }
 
 // ── Helpers para alertas (cron job) ───────────────────────────────────────

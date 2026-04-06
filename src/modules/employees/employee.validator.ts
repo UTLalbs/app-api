@@ -34,6 +34,8 @@ const documentStatusSchema = z.enum([
 	"rejected",
 ]);
 
+const renewalFromSchema = z.enum(["upload_date", "expiry_date"]);
+
 const documentTypeSchema = z.enum([
 	"ine",
 	"curp",
@@ -347,8 +349,13 @@ export const updateDocumentSchema = z.object({
 	body: z.object({
 		status: documentStatusSchema.optional(),
 		notes: z.string().nullable().optional(),
+		issuedAt: z.string().datetime().nullable().optional(),
 		expiresAt: z.string().datetime().nullable().optional(),
-		alertDays: z.coerce.number().min(1).max(365).optional(),
+		alertDays: z.coerce.number().min(0).max(365).optional(),
+		hasRenewal: z.boolean().optional(), // ← agregar
+		renewalMonths: z.coerce.number().min(1).max(120).nullable().optional(), // ← agregar
+		renewalFrom: renewalFromSchema.optional(), // ← agregar
+		renewalStartDate: z.string().datetime().nullable().optional(), // ← agregar
 		verifiedAt: z.string().datetime().nullable().optional(),
 		verifiedBy: z.string().length(24).nullable().optional(),
 	}),
@@ -393,6 +400,7 @@ export const updateChecklistItemSchema = z.object({
 		hasExpiry: z.boolean().optional(),
 		hasRenewal: z.boolean().optional(),
 		renewalMonths: z.coerce.number().min(1).max(120).nullable().optional(),
+		renewalFrom: renewalFromSchema.optional(), // ← agregar
 		documentId: z.string().length(24).nullable().optional(),
 	}),
 });
@@ -409,7 +417,8 @@ export const itemIdParamSchema = z.object({
 export const auditLogQuerySchema = z.object({
 	params: z.object({id: z.string().length(24)}),
 	query: z.object({
-		field: z.string().optional(),
+		action: z.string().optional(), // ← reemplaza field
+		entityType: z.enum(["document", "checklist_item"]).optional(),
 		from: z.string().datetime().optional(),
 		to: z.string().datetime().optional(),
 		limit: z.coerce.number().min(1).max(200).default(50),

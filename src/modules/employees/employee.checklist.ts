@@ -175,22 +175,22 @@ export const EMPLOYEE_CHECKLIST_TEMPLATE: ChecklistTemplate[] = [
 ];
 
 // ── Generar checklist completo desde template ──────────────────────────────
-
-export function buildChecklist(): Omit<ChecklistItem, "_id">[] {
-	return EMPLOYEE_CHECKLIST_TEMPLATE.map((t) => ({
-		type: t.type,
-		label: t.label,
-		required: t.required,
-		status: "pending",
-		documentId: null,
-		hasExpiry: t.hasExpiry,
-		alertDays: null,
-		hasRenewal: t.hasRenewal,
-		renewalMonths: null,
-		lastRenewedAt: null,
-		waivedBy: null,
-		waivedAt: null,
-		waivedReason: null,
-		waivedNote: null,
-	}));
+export function buildChecklist(): Omit<ChecklistItem, '_id'>[] {
+  return EMPLOYEE_CHECKLIST_TEMPLATE.map((t) => ({
+    type:          t.type,
+    label:         t.label,
+    required:      t.required,
+    status:        'pending',
+    documentId:    null,
+    hasExpiry:     t.hasExpiry,
+    alertDays:     null,
+    hasRenewal:    t.hasRenewal,
+    renewalMonths: null,
+    renewalFrom:   'upload_date' as const,    // ← agregar
+    lastRenewedAt: null,
+    waivedBy:      null,
+    waivedAt:      null,
+    waivedReason:  null,
+    waivedNote:    null,
+  }));
 }

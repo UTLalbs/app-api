@@ -1,6 +1,6 @@
-import {ObjectId} from "mongodb";
+import { ObjectId } from 'mongodb';
 
-import {logger} from "../../config/logger";
+import { logger } from '../../config/logger';
 import {
 	validateFile,
 	uploadFile,
@@ -8,470 +8,546 @@ import {
 	getPresignedUrl,
 	generateS3Key,
 	extractKeyFromUrl,
-} from "../../infrastructure/storage/s3.service";
-import {NotFoundError, ForbiddenError} from "../../shared/errors/AppError";
-import type {User} from "../users/user.types";
+} from '../../infrastructure/storage/s3.service';
+import { NotFoundError, ForbiddenError } from '../../shared/errors/AppError';
+import type { User } from '../users/user.types';
 
-import {buildChecklist} from "./employee.checklist";
+import { buildChecklist } from './employee.checklist';
 import {
-	findAllEmployees,
-	findEmployeeById,
-	updateEmployeeProfile,
-	addEmergencyContact,
-	updateEmergencyContact,
-	removeEmergencyContact,
-	addBankAccount,
-	updateBankAccount,
-	removeBankAccount,
-	addEmployeeDocument,
-	updateEmployeeDocument,
-	removeEmployeeDocument,
-	addChecklistItems,
-	updateChecklistItem,
-	removeChecklistItem,
-	findAuditLog,
-} from "./employee.repository";
+  findAllEmployees,
+  findEmployeeById,
+  updateEmployeeProfile,
+  addEmergencyContact,
+  updateEmergencyContact,
+  removeEmergencyContact,
+  addBankAccount,
+  updateBankAccount,
+  removeBankAccount,
+  addEmployeeDocument,
+  updateEmployeeDocument,
+  removeEmployeeDocument,
+  addChecklistItems,
+  updateChecklistItem,
+  removeChecklistItem,
+  findAuditLog,
+  addAuditEntry,
+} from './employee.repository';
 import type {
-	AuditLogEntry,
-	ChecklistStatus,
-	DocumentStatus,
-	DocumentType,
-	EmergencyContact,
-	EmployeeProfile,
-	EmployeeQueryFilter,
-} from "./employee.types";
+  AuditAction,
+  ChecklistStatus,
+  DocumentStatus,
+  DocumentType,
+  EmergencyContact,
+  EmployeeProfile,
+  EmployeeQueryFilter,
+  RenewalFrom,
+  WaivedReason,
+} from './employee.types';
+
 
 // ── Listar empleados ───────────────────────────────────────────────────────
 
 export async function listEmployees(
-	orgId: string,
-	filter: EmployeeQueryFilter,
-): Promise<{employees: User[]; total: number}> {
-	return findAllEmployees(orgId, filter);
+  orgId: string,
+  filter: EmployeeQueryFilter,
+): Promise<{ employees: User[]; total: number }> {
+  return findAllEmployees(orgId, filter);
 }
 
 // ── Obtener empleado ───────────────────────────────────────────────────────
 
-export async function getEmployee(id: string, orgId: string): Promise<User> {
-	const employee = await findEmployeeById(id, orgId);
-	if (!employee) throw new NotFoundError("Employee");
-	return employee;
+export async function getEmployee(
+  id: string,
+  orgId: string,
+): Promise<User> {
+  const employee = await findEmployeeById(id, orgId);
+  if (!employee) throw new NotFoundError('Employee');
+  return employee;
 }
 
 // ── Actualizar perfil ──────────────────────────────────────────────────────
 
 export async function editEmployeeProfile(
-	id: string,
-	orgId: string,
-	fields: Partial<EmployeeProfile>,
-	actorId: string,
+  id: string,
+  orgId: string,
+  fields: Partial<EmployeeProfile>,
+  actorId: string,
 ): Promise<User> {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
 
-	const currentProfile = existing.employeeProfile!;
+  const updated = await updateEmployeeProfile(id, orgId, fields, []);
+  if (!updated) throw new NotFoundError('Employee');
 
-	// Generar audit log para campos que cambiaron
-	const auditEntries: AuditLogEntry[] = [];
+  logger.info(
+    { employeeId: id, changedFields: Object.keys(fields).length, actorId },
+    'Employee profile updated',
+  );
 
-	for (const [key, newValue] of Object.entries(fields)) {
-		const oldValue = currentProfile[key as keyof EmployeeProfile];
-		if (JSON.stringify(oldValue) !== JSON.stringify(newValue)) {
-			auditEntries.push({
-				_id: new ObjectId(),
-				field: key,
-				oldValue,
-				newValue,
-				changedBy: new ObjectId(actorId),
-				changedAt: new Date(),
-				reason: null,
-			});
-		}
-	}
-
-	const updated = await updateEmployeeProfile(id, orgId, fields, auditEntries);
-	if (!updated) throw new NotFoundError("Employee");
-
-	logger.info(
-		{employeeId: id, changedFields: Object.keys(fields).length},
-		"Employee profile updated",
-	);
-
-	return updated;
+  return updated;
 }
 
 // ── Emergency Contacts ─────────────────────────────────────────────────────
 
 export async function addContact(
-	id: string,
-	orgId: string,
-	data: Omit<EmergencyContact, "_id">,
+  id: string,
+  orgId: string,
+  data: Omit<EmergencyContact, '_id'>,
 ): Promise<User> {
-	const updated = await addEmergencyContact(id, orgId, data);
-	if (!updated) throw new NotFoundError("Employee");
-	return updated;
+  const updated = await addEmergencyContact(id, orgId, data);
+  if (!updated) throw new NotFoundError('Employee');
+  return updated;
 }
 
 export async function editContact(
-	id: string,
-	orgId: string,
-	contactId: string,
-	data: Partial<Omit<EmergencyContact, "_id">>,
+  id: string,
+  orgId: string,
+  contactId: string,
+  data: Partial<Omit<EmergencyContact, '_id'>>,
 ): Promise<User> {
-	const updated = await updateEmergencyContact(id, orgId, contactId, data);
-	if (!updated) throw new NotFoundError("EmergencyContact");
-	return updated;
+  const updated = await updateEmergencyContact(id, orgId, contactId, data);
+  if (!updated) throw new NotFoundError('EmergencyContact');
+  return updated;
 }
 
 export async function deleteContact(
-	id: string,
-	orgId: string,
-	contactId: string,
+  id: string,
+  orgId: string,
+  contactId: string,
 ): Promise<void> {
-	const deleted = await removeEmergencyContact(id, orgId, contactId);
-	if (!deleted) throw new NotFoundError("EmergencyContact");
+  const deleted = await removeEmergencyContact(id, orgId, contactId);
+  if (!deleted) throw new NotFoundError('EmergencyContact');
 }
 
 // ── Bank Accounts ──────────────────────────────────────────────────────────
 
 export async function addAccount(
-	id: string,
-	orgId: string,
-	data: {
-		bankName: string;
-		accountNumber: string;
-		clabe: string;
-		isDefault: boolean;
-		documentUrl: string | null;
-	},
+  id: string,
+  orgId: string,
+  data: {
+    bankName:      string;
+    accountNumber: string;
+    clabe:         string;
+    isDefault:     boolean;
+    documentUrl:   string | null;
+  },
 ) {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
 
-	const account = await addBankAccount(id, orgId, data);
-	if (!account) throw new NotFoundError("Employee");
+  const account = await addBankAccount(id, orgId, data);
+  if (!account) throw new NotFoundError('Employee');
 
-	logger.info({employeeId: id, bankName: data.bankName}, "Bank account added");
+  logger.info({ employeeId: id, bankName: data.bankName }, 'Bank account added');
 
-	return account;
+  return account;
 }
 
 export async function editAccount(
-	id: string,
-	orgId: string,
-	accountId: string,
-	data: {bankName?: string; isDefault?: boolean; documentUrl?: string | null},
+  id: string,
+  orgId: string,
+  accountId: string,
+  data: { bankName?: string; isDefault?: boolean; documentUrl?: string | null },
 ): Promise<User> {
-	const updated = await updateBankAccount(id, orgId, accountId, data);
-	if (!updated) throw new NotFoundError("BankAccount");
-	return updated;
+  const updated = await updateBankAccount(id, orgId, accountId, data);
+  if (!updated) throw new NotFoundError('BankAccount');
+  return updated;
 }
 
 export async function deleteAccount(
-	id: string,
-	orgId: string,
-	accountId: string,
+  id: string,
+  orgId: string,
+  accountId: string,
 ): Promise<void> {
-	const deleted = await removeBankAccount(id, orgId, accountId);
-	if (!deleted) throw new NotFoundError("BankAccount");
+  const deleted = await removeBankAccount(id, orgId, accountId);
+  if (!deleted) throw new NotFoundError('BankAccount');
 }
 
 // ── Documents ──────────────────────────────────────────────────────────────
 
 export async function uploadDocument(
-	id: string,
-	orgId: string,
-	file: Express.Multer.File,
-	meta: {
-		type: DocumentType;
-		name: string;
-		issuedAt: Date | null;
-		expiresAt: Date | null;
-		alertDays: number;
-	},
+  id: string,
+  orgId: string,
+  file: Express.Multer.File,
+  meta: {
+    type:       DocumentType;
+    name:       string;
+    issuedAt:   Date | null;
+    expiresAt:  Date | null;
+    alertDays:  number;
+  },
+  actorId: string,
 ) {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
 
-	// Validar archivo
-	validateFile(file.mimetype, file.size);
+  validateFile(file.mimetype, file.size);
 
-	// Subir a S3
-	const key = generateS3Key(
-		"employees",
-		orgId,
-		id,
-		meta.type,
-		file.originalname,
-	);
-	const upload = await uploadFile(key, file.buffer, file.mimetype);
+  const key    = generateS3Key('employees', orgId, id, meta.type, file.originalname);
+  const upload = await uploadFile(key, file.buffer, file.mimetype);
 
-	// Guardar en MongoDB
-	const doc = await addEmployeeDocument(id, orgId, {
-		type: meta.type,
-		name: meta.name,
-		fileUrl: upload.url,
-		fileSize: upload.fileSize,
-		mimeType: upload.mimeType,
-		issuedAt: meta.issuedAt,
-		expiresAt: meta.expiresAt,
-		alertDays: meta.alertDays,
-		verifiedAt: null,
-		verifiedBy: null,
-		status: "pending",
-		notes: null,
-		uploadedAt: new Date(),
-		previousVersions: [],
-	});
+  // Verificar si existe documento previo con mismo type
+  const prevDoc = existing.employeeProfile?.documents?.find(
+    (d) => d.type === meta.type,
+  );
 
-	if (!doc) throw new NotFoundError("Employee");
+  const now = new Date();
 
-	logger.info(
-		{
-			employeeId: id,
-			type: meta.type,
-			key,
-			alertDays: meta.alertDays,
-			hasExpiry: !!meta.expiresAt,
-		},
-		"Document uploaded",
-	);
+  const doc = await addEmployeeDocument(id, orgId, {
+    type:              meta.type,
+    name:              meta.name,
+    fileUrl:           upload.url,
+    fileSize:          upload.fileSize,
+    mimeType:          upload.mimeType,
+    issuedAt:          meta.issuedAt,
+    expiresAt:         meta.expiresAt,
+    alertDays:         meta.alertDays,
+    hasRenewal:        false,
+    renewalMonths:     null,
+    renewalFrom:       'upload_date',
+    renewalStartDate:  now,
+    replacedBy:        null,
+    verifiedAt:        null,
+    verifiedBy:        null,
+    status:            'pending',
+    notes:             null,
+    uploadedAt:        now,
+    previousVersions:  [],
+  });
 
-	return doc;
+  if (!doc) throw new NotFoundError('Employee');
+
+  // Audit log — document_replaced o document_uploaded
+  const action: AuditAction = prevDoc ? 'document_replaced' : 'document_uploaded';
+
+  await addAuditEntry(id, orgId, {
+    action,
+    entityId:   doc._id.toHexString(),
+    entityType: 'document',
+    changedBy:  new ObjectId(actorId),
+    changedAt:  now,
+    metadata: {
+      fileName:    meta.name,
+      fileSize:    upload.fileSize,
+      type:        meta.type,
+      ...(prevDoc && { replacedDocId: prevDoc._id.toString() }),
+    },
+  });
+
+  logger.info(
+    { employeeId: id, type: meta.type, key, action },
+    'Document uploaded',
+  );
+
+  return doc;
 }
 
 export async function editDocument(
-	id: string,
-	orgId: string,
-	docId: string,
-	fields: {
-		status?: DocumentStatus;
-		notes?: string | null;
-		expiresAt?: Date | null;
-		alertDays?: number;
-		verifiedAt?: Date | null;
-		verifiedBy?: string | null;
-	},
+  id: string,
+  orgId: string,
+  docId: string,
+  fields: {
+    status?:           DocumentStatus;
+    notes?:            string | null;
+    issuedAt?:         Date | null;
+    expiresAt?:        Date | null;
+    alertDays?:        number;
+    hasRenewal?:       boolean;
+    renewalMonths?:    number | null;
+    renewalFrom?:      RenewalFrom;
+    renewalStartDate?: Date | null;
+    verifiedAt?:       Date | null;
+    verifiedBy?:       string | null;
+  },
+  actorId: string,
 ): Promise<User> {
-	const verifiedBy = fields.verifiedBy
-		? new ObjectId(fields.verifiedBy)
-		: fields.verifiedBy === null
-			? null
-			: undefined;
+  const verifiedBy = fields.verifiedBy
+    ? new ObjectId(fields.verifiedBy)
+    : fields.verifiedBy === null
+      ? null
+      : undefined;
 
-	const updated = await updateEmployeeDocument(id, orgId, docId, {
-		...fields,
-		verifiedBy,
-	});
+  const updated = await updateEmployeeDocument(id, orgId, docId, {
+    ...fields,
+    verifiedBy,
+  });
 
-	if (!updated) throw new NotFoundError("Document");
-	return updated;
+  if (!updated) throw new NotFoundError('Document');
+
+  // Audit log
+  const action: AuditAction =
+    fields.status === 'verified'  ? 'document_verified'  :
+    fields.status === 'rejected'  ? 'document_rejected'  :
+    fields.alertDays !== undefined ? 'alert_configured'  :
+    fields.expiresAt !== undefined ? 'date_edited'        :
+    'date_edited';
+
+  await addAuditEntry(id, orgId, {
+    action,
+    entityId:   docId,
+    entityType: 'document',
+    changedBy:  new ObjectId(actorId),
+    changedAt:  new Date(),
+    metadata:   fields as Record<string, unknown>,
+  });
+
+  return updated;
 }
 
 export async function deleteDocument(
-	id: string,
-	orgId: string,
-	docId: string,
+  id: string,
+  orgId: string,
+  docId: string,
+  actorId: string,
 ): Promise<void> {
-	const result = await removeEmployeeDocument(id, orgId, docId);
-	if (!result) throw new NotFoundError("Document");
+  const employee = await findEmployeeById(id, orgId);
+  if (!employee) throw new NotFoundError('Employee');
 
-	// Eliminar de S3 — fire and forget
-	const key = extractKeyFromUrl(result.fileUrl);
-	deleteFile(key).catch((err) =>
-		logger.error({err, key}, "Failed to delete document from S3"),
-	);
+  const doc = employee.employeeProfile?.documents?.find(
+    (d) => d._id.toString() === docId,
+  );
 
-	// Eliminar versiones anteriores de S3
-	for (const prevUrl of result.previousVersions) {
-		const prevKey = extractKeyFromUrl(prevUrl);
-		deleteFile(prevKey).catch((err) =>
-			logger.error({err, prevKey}, "Failed to delete previous version from S3"),
-		);
-	}
+  if (!doc) throw new NotFoundError('Document');
 
-	logger.info({employeeId: id, docId}, "Document deleted");
+  const result = await removeEmployeeDocument(id, orgId, docId);
+  if (!result) throw new NotFoundError('Document');
+
+  // Audit log
+  await addAuditEntry(id, orgId, {
+    action:     'document_deleted',
+    entityId:   docId,
+    entityType: 'document',
+    changedBy:  new ObjectId(actorId),
+    changedAt:  new Date(),
+    metadata: {
+      fileName: doc.name,
+      fileSize: (doc as unknown as { fileSize: number }).fileSize,
+      type:     doc.type,
+    },
+  });
+
+  // Eliminar de S3 — fire and forget
+  const key = extractKeyFromUrl(result.fileUrl);
+  deleteFile(key).catch((err) =>
+    logger.error({ err, key }, 'Failed to delete document from S3'),
+  );
+
+  for (const prevUrl of result.previousVersions) {
+    const prevKey = extractKeyFromUrl(prevUrl);
+    deleteFile(prevKey).catch((err) =>
+      logger.error({ err, prevKey }, 'Failed to delete previous version from S3'),
+    );
+  }
+
+  logger.info({ employeeId: id, docId }, 'Document deleted');
 }
 
 export async function getDocumentUrl(
-	id: string,
-	orgId: string,
-	docId: string,
-): Promise<{url: string; expiresAt: Date}> {
-	const employee = await findEmployeeById(id, orgId);
-	if (!employee) throw new NotFoundError("Employee");
+  id: string,
+  orgId: string,
+  docId: string,
+): Promise<{ url: string; expiresAt: Date }> {
+  const employee = await findEmployeeById(id, orgId);
+  if (!employee) throw new NotFoundError('Employee');
 
-	const doc = employee.employeeProfile?.documents?.find(
-		(d) => d._id.toString() === docId,
-	);
+  const doc = employee.employeeProfile?.documents?.find(
+    (d) => d._id.toString() === docId,
+  );
 
-	if (!doc) throw new NotFoundError("Document");
+  if (!doc) throw new NotFoundError('Document');
 
-	const key = extractKeyFromUrl(doc.fileUrl);
-	return getPresignedUrl(key, 3600);
+  const key = extractKeyFromUrl(doc.fileUrl);
+  return getPresignedUrl(key, 3600);
 }
 
 // ── Checklist ──────────────────────────────────────────────────────────────
 
 export async function generateChecklist(
-	id: string,
-	orgId: string,
+  id: string,
+  orgId: string,
 ): Promise<User> {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
 
-	const currentChecklist = existing.employeeProfile?.checklist ?? [];
+  const currentChecklist = existing.employeeProfile?.checklist ?? [];
 
-	// Usar template único — sin parámetros de tipo/posición
-	const newItems = buildChecklist().filter(
-		(item) => !currentChecklist.some((c) => c.type === item.type),
-	);
+  const newItems = buildChecklist().filter(
+    (item) => !currentChecklist.some((c) => c.type === item.type),
+  );
 
-	if (newItems.length === 0) return existing;
+  if (newItems.length === 0) return existing;
 
-	const updated = await addChecklistItems(id, orgId, newItems);
-	if (!updated) throw new NotFoundError("Employee");
+  const updated = await addChecklistItems(id, orgId, newItems);
+  if (!updated) throw new NotFoundError('Employee');
 
-	logger.info(
-		{employeeId: id, itemsAdded: newItems.length},
-		"Checklist generated",
-	);
+  logger.info(
+    { employeeId: id, itemsAdded: newItems.length },
+    'Checklist generated',
+  );
 
-	return updated;
+  return updated;
 }
 
 export async function addCustomChecklistItem(
-	id: string,
-	orgId: string,
-	data: {type: string; label: string; required: boolean},
+  id: string,
+  orgId: string,
+  data: { type: string; label: string; required: boolean },
+  actorId: string,
 ): Promise<User> {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
 
-	const updated = await addChecklistItems(id, orgId, [
-		{
-			type: data.type,
-			label: data.label,
-			required: data.required,
-			status: "pending",
-			documentId: null,
-			hasExpiry: false,
-			alertDays: null,
-			hasRenewal: false,
-			renewalMonths: null,
-			lastRenewedAt: null,
-			waivedBy: null,
-			waivedAt: null,
-			waivedReason: null,
-			waivedNote: null,
-		},
-	]);
+  const updated = await addChecklistItems(id, orgId, [
+    {
+      type:          data.type,
+      label:         data.label,
+      required:      data.required,
+      status:        'pending',
+      documentId:    null,
+      hasExpiry:     false,
+      alertDays:     null,
+      hasRenewal:    false,
+      renewalMonths: null,
+      renewalFrom:   'upload_date',
+      lastRenewedAt: null,
+      waivedBy:      null,
+      waivedAt:      null,
+      waivedReason:  null,
+      waivedNote:    null,
+    },
+  ]);
 
-	if (!updated) throw new NotFoundError("Employee");
-	return updated;
+  if (!updated) throw new NotFoundError('Employee');
+
+  // Audit log
+  await addAuditEntry(id, orgId, {
+    action:     'item_added',
+    entityId:   data.type,
+    entityType: 'checklist_item',
+    changedBy:  new ObjectId(actorId),
+    changedAt:  new Date(),
+    metadata:   { type: data.type, label: data.label },
+  });
+
+  return updated;
 }
 
 export async function editChecklistItem(
-	id: string,
-	orgId: string,
-	itemId: string,
-	data: {
-		status?: "complete" | "pending" | "waived";
-		waivedReason?: string | null;
-		waivedNote?: string | null;
-		alertDays?: number | null;
-		hasExpiry?: boolean;
-		hasRenewal?: boolean;
-		renewalMonths?: number | null;
-		documentId?: string | null;
-	},
-	actorId: string,
+  id: string,
+  orgId: string,
+  itemId: string,
+  data: {
+    status?:        'complete' | 'pending' | 'waived';
+    waivedReason?:  WaivedReason | null;
+    waivedNote?:    string | null;
+    alertDays?:     number | null;
+    hasExpiry?:     boolean;
+    hasRenewal?:    boolean;
+    renewalMonths?: number | null;
+    renewalFrom?:   RenewalFrom;
+    documentId?:    string | null;
+  },
+  actorId: string,
 ): Promise<User> {
-	if (data.status === "waived" && !data.waivedReason) {
-		throw new ForbiddenError("waivedReason es requerido al dispensar un item");
-	}
+  if (data.status === 'waived' && !data.waivedReason) {
+    throw new ForbiddenError('waivedReason es requerido al dispensar un item');
+  }
 
-	const fields: {
-		status?: ChecklistStatus;
-		documentId?: ObjectId | null;
-		hasExpiry?: boolean;
-		alertDays?: number | null;
-		hasRenewal?: boolean;
-		renewalMonths?: number | null;
-		waivedBy?: ObjectId | null;
-		waivedAt?: Date | null;
-		waivedReason?: string | null;
-		waivedNote?: string | null;
-	} = {};
+  const fields: {
+    status?:        ChecklistStatus;
+    documentId?:    ObjectId | null;
+    hasExpiry?:     boolean;
+    alertDays?:     number | null;
+    hasRenewal?:    boolean;
+    renewalMonths?: number | null;
+    renewalFrom?:   RenewalFrom;
+    waivedBy?:      ObjectId | null;
+    waivedAt?:      Date | null;
+    waivedReason?:  WaivedReason | null;
+    waivedNote?:    string | null;
+  } = {};
 
-	if (data.status !== undefined) fields.status = data.status;
-	if (data.hasExpiry !== undefined) fields.hasExpiry = data.hasExpiry;
-	if (data.alertDays !== undefined) fields.alertDays = data.alertDays;
-	if (data.hasRenewal !== undefined) fields.hasRenewal = data.hasRenewal;
-	if (data.renewalMonths !== undefined)
-		fields.renewalMonths = data.renewalMonths;
-	if (data.waivedNote !== undefined) fields.waivedNote = data.waivedNote;
+  if (data.status !== undefined)        fields.status        = data.status;
+  if (data.hasExpiry !== undefined)     fields.hasExpiry     = data.hasExpiry;
+  if (data.alertDays !== undefined)     fields.alertDays     = data.alertDays;
+  if (data.hasRenewal !== undefined)    fields.hasRenewal    = data.hasRenewal;
+  if (data.renewalMonths !== undefined) fields.renewalMonths = data.renewalMonths;
+  if (data.renewalFrom !== undefined)   fields.renewalFrom   = data.renewalFrom;
+  if (data.waivedNote !== undefined)    fields.waivedNote    = data.waivedNote;
 
-	if (data.documentId !== undefined) {
-		fields.documentId = data.documentId ? new ObjectId(data.documentId) : null;
-	}
+  if (data.documentId !== undefined) {
+    fields.documentId = data.documentId ? new ObjectId(data.documentId) : null;
+  }
 
-	if (data.status === "waived") {
-		fields.waivedBy = new ObjectId(actorId);
-		fields.waivedAt = new Date();
-		fields.waivedReason = data.waivedReason ?? null;
-	}
+  if (data.status === 'waived') {
+    fields.waivedBy     = new ObjectId(actorId);
+    fields.waivedAt     = new Date();
+    fields.waivedReason = data.waivedReason ?? null;
+  }
 
-	if (data.status === "pending") {
-		// Al volver a pending → limpiar waived
-		fields.waivedBy = null;
-		fields.waivedAt = null;
-		fields.waivedReason = null;
-		fields.waivedNote = null;
-	}
+  if (data.status === 'pending') {
+    fields.waivedBy     = null;
+    fields.waivedAt     = null;
+    fields.waivedReason = null;
+    fields.waivedNote   = null;
+  }
 
-	const updated = await updateChecklistItem(id, orgId, itemId, fields);
-	if (!updated) throw new NotFoundError("ChecklistItem");
-	return updated;
+  const updated = await updateChecklistItem(id, orgId, itemId, fields);
+  if (!updated) throw new NotFoundError('ChecklistItem');
+
+  // Audit log
+  const action: AuditAction =
+    data.status === 'waived'  ? 'item_waived'       :
+    data.status === 'pending' ? 'item_restored'      :
+    data.alertDays !== undefined ? 'alert_configured' :
+    'alert_configured';
+
+  await addAuditEntry(id, orgId, {
+    action,
+    entityId:   itemId,
+    entityType: 'checklist_item',
+    changedBy:  new ObjectId(actorId),
+    changedAt:  new Date(),
+    metadata:   data as Record<string, unknown>,
+  });
+
+  return updated;
 }
 
 export async function deleteChecklistItem(
-	id: string,
-	orgId: string,
-	itemId: string,
+  id: string,
+  orgId: string,
+  itemId: string,
 ): Promise<void> {
-	const deleted = await removeChecklistItem(id, orgId, itemId);
-	if (!deleted) throw new NotFoundError("ChecklistItem");
+  const deleted = await removeChecklistItem(id, orgId, itemId);
+  if (!deleted) throw new NotFoundError('ChecklistItem');
 }
 
 // ── Audit Log ──────────────────────────────────────────────────────────────
 
 export async function getAuditLog(
-	id: string,
-	orgId: string,
-	filter: {field?: string; from?: Date; to?: Date; limit?: number},
-): Promise<AuditLogEntry[]> {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
-
-	return findAuditLog(id, orgId, filter);
+  id: string,
+  orgId: string,
+  filter: { action?: string; entityType?: string; from?: Date; to?: Date; limit?: number },
+): Promise<unknown[]> {
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
+  return findAuditLog(id, orgId, filter);
 }
-
 // ── Checklist stats ────────────────────────────────────────────────────────
 
 export function computeChecklistMeta(
-	checklist: User["employeeProfile"] extends null
-		? never
-		: NonNullable<User["employeeProfile"]>["checklist"],
+  checklist: NonNullable<User['employeeProfile']>['checklist'],
 ) {
-	const total = checklist.length;
-	const complete = checklist.filter((i) => i.status === "complete").length;
-	const required = checklist.filter((i) => i.required).length;
-	const requiredComplete = checklist.filter(
-		(i) => i.required && i.status === "complete",
-	).length;
-	const completion =
-		required > 0 ? Math.round((requiredComplete / required) * 100) : 0;
+  const total            = checklist.length;
+  const complete         = checklist.filter((i) => i.status === 'complete').length;
+  const required         = checklist.filter((i) => i.required).length;
+  const requiredComplete = checklist.filter(
+    (i) => i.required && i.status === 'complete',
+  ).length;
+  const completion = required > 0
+    ? Math.round((requiredComplete / required) * 100)
+    : 0;
 
-	return {total, complete, required, requiredComplete, completion};
+  return { total, complete, required, requiredComplete, completion };
 }
