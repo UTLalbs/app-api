@@ -40,7 +40,6 @@ import {
   uploadDocumentSchema,
   updateDocumentSchema,
   docIdParamSchema,
-  generateChecklistSchema,
   createChecklistItemSchema,
   updateChecklistItemSchema,
   itemIdParamSchema,
@@ -172,7 +171,7 @@ employeeRouter.get(
 
 employeeRouter.post(
   '/:id/checklist/generate',
-  validate(generateChecklistSchema),
+  validate(employeeIdParamSchema),
   authorize('empoyees', 'update'),
   generateEmployeeChecklist,
 );

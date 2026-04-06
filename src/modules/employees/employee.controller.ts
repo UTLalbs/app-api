@@ -33,7 +33,6 @@ import type {
 	CreateBankAccountInput,
 	CreateChecklistItemInput,
 	CreateEmergencyContactInput,
-	GenerateChecklistInput,
 	ListEmployeesInput,
 	UpdateBankAccountInput,
 	UpdateChecklistItemInput,
@@ -290,21 +289,19 @@ export const getChecklist = asyncHandler(
 );
 
 export const generateEmployeeChecklist = asyncHandler(
-	async (req: Request & GenerateChecklistInput, res: Response) => {
-		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
+  async (req: Request, res: Response) => {
+    const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? '';
 
-		const updated = await generateChecklist(
-			String(req.params.id),
-			orgId,
-			req.body.employeeType,
-			req.body.position ?? null,
-		);
+    const updated = await generateChecklist(
+      String(req.params.id),
+      orgId,
+    );
 
-		const checklist = updated.employeeProfile?.checklist ?? [];
-		const meta = computeChecklistMeta(checklist);
+    const checklist = updated.employeeProfile?.checklist ?? [];
+    const meta      = computeChecklistMeta(checklist);
 
-		res.json({success: true, data: checklist, meta});
-	},
+    res.json({ success: true, data: checklist, meta });
+  },
 );
 
 export const createChecklistItem = asyncHandler(

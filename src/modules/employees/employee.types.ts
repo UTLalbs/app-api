@@ -25,10 +25,20 @@ export type EmployeeDepartment =
   | 'security'
   | 'human_resources';
 
+
+  export type WaivedReason =
+  | 'not_applicable'
+  | 'pending_process'
+  | 'foreign_employee'
+  | 'external_contractor'
+  | 'director_approval'
+  | 'other';
+
+
 export type EmploymentStatus = 'active' | 'leave' | 'terminated';
 export type DriverStatus     = 'available' | 'on_trip' | 'off_duty';
 export type DocumentStatus   = 'pending' | 'verified' | 'expired' | 'rejected';
-export type ChecklistStatus  = 'pending' | 'complete' | 'waived';
+export type ChecklistStatus = 'pending' | 'complete' | 'waived' | 'expired';
 export type DrugTestResult   = 'negative' | 'positive' | 'pending';
 export type MedicalResult    = 'apto' | 'apto_con_restricciones' | 'no_apto';
 
@@ -53,12 +63,12 @@ export type DocumentType =
   | 'dot_physical'
   | 'passport'
   | 'visa'
+  | 'customs_badge'            
   | 'fast_card'
   | 'mvr_report'
   | 'psp_report'
   | 'technical_certification'
   | 'other';
-
 // ── Subdocumentos — Emergency Contact ─────────────────────────────────────
 
 export interface EmergencyContact {
@@ -224,15 +234,21 @@ export interface EmployeeDocument {
 // ── Subdocumentos — Checklist ──────────────────────────────────────────────
 
 export interface ChecklistItem {
-  _id:          ObjectId;
-  type:         string;
-  label:        string;
-  required:     boolean;
-  status:       ChecklistStatus;
-  documentId:   ObjectId | null;
-  waivedBy:     ObjectId | null;
-  waivedAt:     Date | null;
-  waivedReason: string | null;
+  _id:           ObjectId;
+  type:          string;
+  label:         string;
+  required:      boolean;
+  status:        ChecklistStatus;
+  documentId:    ObjectId | null;
+  hasExpiry:     boolean;
+  alertDays:     number | null;
+  hasRenewal:    boolean;
+  renewalMonths: number | null;
+  lastRenewedAt: Date | null;
+  waivedBy:      ObjectId | null;
+  waivedAt:      Date | null;
+  waivedReason:  WaivedReason | null;
+  waivedNote:    string | null;
 }
 
 // ── Subdocumentos — Audit Log ──────────────────────────────────────────────

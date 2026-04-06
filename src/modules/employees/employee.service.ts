@@ -12,7 +12,7 @@ import {
 import {NotFoundError, ForbiddenError} from "../../shared/errors/AppError";
 import type {User} from "../users/user.types";
 
-import {getChecklistTemplate} from "./employee.checklist";
+import {buildChecklist} from "./employee.checklist";
 import {
 	findAllEmployees,
 	findEmployeeById,
@@ -37,10 +37,8 @@ import type {
 	DocumentStatus,
 	DocumentType,
 	EmergencyContact,
-	EmployeePosition,
 	EmployeeProfile,
 	EmployeeQueryFilter,
-	EmployeeType,
 } from "./employee.types";
 
 // ── Listar empleados ───────────────────────────────────────────────────────
@@ -318,29 +316,16 @@ export async function getDocumentUrl(
 export async function generateChecklist(
 	id: string,
 	orgId: string,
-	employeeType: EmployeeType,
-	position: EmployeePosition | null,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
 
-	const template = getChecklistTemplate(employeeType, position);
 	const currentChecklist = existing.employeeProfile?.checklist ?? [];
 
-	// Solo agregar items que no existen ya
-	const existingTypes = new Set(currentChecklist.map((item) => item.type));
-	const newItems = template
-		.filter((t) => !existingTypes.has(t.type))
-		.map((t) => ({
-			type: t.type,
-			label: t.label,
-			required: t.required,
-			status: "pending" as ChecklistStatus,
-			documentId: null,
-			waivedBy: null,
-			waivedAt: null,
-			waivedReason: null,
-		}));
+	// Usar template único — sin parámetros de tipo/posición
+	const newItems = buildChecklist().filter(
+		(item) => !currentChecklist.some((c) => c.type === item.type),
+	);
 
 	if (newItems.length === 0) return existing;
 
@@ -370,9 +355,15 @@ export async function addCustomChecklistItem(
 			required: data.required,
 			status: "pending",
 			documentId: null,
+			hasExpiry: false,
+			alertDays: null,
+			hasRenewal: false,
+			renewalMonths: null,
+			lastRenewedAt: null,
 			waivedBy: null,
 			waivedAt: null,
 			waivedReason: null,
+			waivedNote: null,
 		},
 	]);
 
@@ -385,10 +376,14 @@ export async function editChecklistItem(
 	orgId: string,
 	itemId: string,
 	data: {
-		required?: boolean;
-		status?: ChecklistStatus;
-		documentId?: string | null;
+		status?: "complete" | "pending" | "waived";
 		waivedReason?: string | null;
+		waivedNote?: string | null;
+		alertDays?: number | null;
+		hasExpiry?: boolean;
+		hasRenewal?: boolean;
+		renewalMonths?: number | null;
+		documentId?: string | null;
 	},
 	actorId: string,
 ): Promise<User> {
@@ -397,24 +392,43 @@ export async function editChecklistItem(
 	}
 
 	const fields: {
-		required?: boolean;
 		status?: ChecklistStatus;
 		documentId?: ObjectId | null;
+		hasExpiry?: boolean;
+		alertDays?: number | null;
+		hasRenewal?: boolean;
+		renewalMonths?: number | null;
 		waivedBy?: ObjectId | null;
 		waivedAt?: Date | null;
 		waivedReason?: string | null;
-	} = {
-		required: data.required,
-		status: data.status,
-		documentId: data.documentId
-			? new ObjectId(data.documentId)
-			: data.documentId === null
-				? null
-				: undefined,
-		waivedBy: data.status === "waived" ? new ObjectId(actorId) : undefined,
-		waivedAt: data.status === "waived" ? new Date() : undefined,
-		waivedReason: data.waivedReason,
-	};
+		waivedNote?: string | null;
+	} = {};
+
+	if (data.status !== undefined) fields.status = data.status;
+	if (data.hasExpiry !== undefined) fields.hasExpiry = data.hasExpiry;
+	if (data.alertDays !== undefined) fields.alertDays = data.alertDays;
+	if (data.hasRenewal !== undefined) fields.hasRenewal = data.hasRenewal;
+	if (data.renewalMonths !== undefined)
+		fields.renewalMonths = data.renewalMonths;
+	if (data.waivedNote !== undefined) fields.waivedNote = data.waivedNote;
+
+	if (data.documentId !== undefined) {
+		fields.documentId = data.documentId ? new ObjectId(data.documentId) : null;
+	}
+
+	if (data.status === "waived") {
+		fields.waivedBy = new ObjectId(actorId);
+		fields.waivedAt = new Date();
+		fields.waivedReason = data.waivedReason ?? null;
+	}
+
+	if (data.status === "pending") {
+		// Al volver a pending → limpiar waived
+		fields.waivedBy = null;
+		fields.waivedAt = null;
+		fields.waivedReason = null;
+		fields.waivedNote = null;
+	}
 
 	const updated = await updateChecklistItem(id, orgId, itemId, fields);
 	if (!updated) throw new NotFoundError("ChecklistItem");
