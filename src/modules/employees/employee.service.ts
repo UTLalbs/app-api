@@ -278,7 +278,51 @@ export async function editDocument(
 
 	if (!updated) throw new NotFoundError("Document");
 
-	// Audit log
+	// ── Sincronizar checklist según status del documento ──────────────────
+	// ── Sincronizar checklist según status del documento ──────────────────
+	if (fields.status === "verified" || fields.status === "rejected") {
+		const employee = await findEmployeeById(id, orgId);
+
+		// Buscar el documento para obtener su type
+		const doc = employee?.employeeProfile?.documents?.find(
+			(d) => d._id.toString() === docId,
+		);
+
+		if (doc) {
+			// Buscar checklist item por documentId O por type
+			const checklistItem = employee?.employeeProfile?.checklist?.find(
+				(c) => c.documentId?.toString() === docId || c.type === doc.type,
+			);
+
+			if (checklistItem) {
+				if (fields.status === "verified") {
+					// Documento verificado → checklist a complete + religar documentId
+					await updateChecklistItem(
+						id,
+						orgId,
+						checklistItem._id.toHexString(),
+						{
+							status: "complete",
+							documentId: new ObjectId(docId),
+						},
+					);
+				} else {
+					// Documento rechazado → checklist a pending + desligar documento
+					await updateChecklistItem(
+						id,
+						orgId,
+						checklistItem._id.toHexString(),
+						{
+							status: "pending",
+							documentId: null,
+						},
+					);
+				}
+			}
+		}
+	}
+
+	// ── Audit log ──────────────────────────────────────────────────────────
 	const action: AuditAction =
 		fields.status === "verified"
 			? "document_verified"
@@ -498,14 +542,23 @@ export async function editChecklistItem(
 	}
 
 	if (data.status === "pending") {
-		// Verificar si el item tiene documentId en MongoDB
-		const existing = await findEmployeeById(id, orgId);
-		const item = existing?.employeeProfile?.checklist?.find(
-			(c) => c._id.toString() === itemId,
-		);
+		// Usar el documentId que viene en el request
+		// Si no viene → verificar el actual en MongoDB
+		let hasDocument = false;
 
-		// Si tiene documento → restaurar como complete, no pending
-		fields.status = item?.documentId != null ? "complete" : "pending";
+		if (data.documentId !== undefined) {
+			// El request está cambiando el documentId
+			hasDocument = data.documentId != null;
+		} else {
+			// El request no toca documentId — verificar el actual
+			const existing = await findEmployeeById(id, orgId);
+			const item = existing?.employeeProfile?.checklist?.find(
+				(c) => c._id.toString() === itemId,
+			);
+			hasDocument = item?.documentId != null;
+		}
+
+		fields.status = hasDocument ? "complete" : "pending";
 		fields.waivedBy = null;
 		fields.waivedAt = null;
 		fields.waivedReason = null;
