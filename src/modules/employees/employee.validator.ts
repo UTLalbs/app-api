@@ -392,7 +392,8 @@ export const updateChecklistItemSchema = z.object({
 		id: z.string().length(24),
 		itemId: z.string().length(24),
 	}),
-	body: z.object({
+	body: z.object( {
+		required: z.boolean().optional(),
 		status: z.enum(["complete", "pending", "waived"]).optional(),
 		waivedReason: waivedReasonSchema.nullable().optional(),
 		waivedNote: z.string().max(500).nullable().optional(),
@@ -400,7 +401,7 @@ export const updateChecklistItemSchema = z.object({
 		hasExpiry: z.boolean().optional(),
 		hasRenewal: z.boolean().optional(),
 		renewalMonths: z.coerce.number().min(1).max(120).nullable().optional(),
-		renewalFrom: renewalFromSchema.optional(), // ← agregar
+		renewalFrom: renewalFromSchema.optional(), 
 		documentId: z.string().length(24).nullable().optional(),
 	}),
 });
