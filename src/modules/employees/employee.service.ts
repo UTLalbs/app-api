@@ -498,6 +498,14 @@ export async function editChecklistItem(
 	}
 
 	if (data.status === "pending") {
+		// Verificar si el item tiene documentId en MongoDB
+		const existing = await findEmployeeById(id, orgId);
+		const item = existing?.employeeProfile?.checklist?.find(
+			(c) => c._id.toString() === itemId,
+		);
+
+		// Si tiene documento → restaurar como complete, no pending
+		fields.status = item?.documentId != null ? "complete" : "pending";
 		fields.waivedBy = null;
 		fields.waivedAt = null;
 		fields.waivedReason = null;
