@@ -51,6 +51,8 @@ const EMPLOYEE_PROJECTION = {
 	"employeeProfile.employmentStatus": 1,
 	"employeeProfile.curp": 1,
 	"employeeProfile.rfc": 1,
+	"employeeProfile.rfcValidatedAt": 1,
+	"employeeProfile.rfcValidatedStatus": 1,
 	"employeeProfile.razonSocial": 1,
 	"employeeProfile.regimenFiscal": 1,
 	"employeeProfile.address": 1,
