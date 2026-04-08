@@ -31,6 +31,7 @@ import {
 	removeChecklistItem,
 	findAuditLog,
 	addAuditEntry,
+	initEmployeeArrays,
 } from "./employee.repository";
 import type {
 	AuditAction,
@@ -64,65 +65,46 @@ export async function getEmployee(id: string, orgId: string): Promise<User> {
 // ── Actualizar perfil ──────────────────────────────────────────────────────
 
 export async function editEmployeeProfile(
-	id: string,
-	orgId: string,
-	fields: Partial<EmployeeProfile>,
-	actorId: string,
+  id: string,
+  orgId: string,
+  fields: Partial<EmployeeProfile>,
+  actorId: string,
 ): Promise<User> {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
 
-	// Inicializar arrays si no existen
-	const initFields: Record<string, unknown> = {};
+  // Inicializar arrays faltantes — delegar al helper
+  await initEmployeeArrays(id, orgId);
 
-	if (!existing.employeeProfile?.checklist?.length) {
-		initFields["employeeProfile.checklist"] = [];
-	}
-	if (!existing.employeeProfile?.documents?.length) {
-		initFields["employeeProfile.documents"] = [];
-	}
-	if (!existing.employeeProfile?.bankAccounts?.length) {
-		initFields["employeeProfile.bankAccounts"] = [];
-	}
-	if (!existing.employeeProfile?.emergencyContacts?.length) {
-		initFields["employeeProfile.emergencyContacts"] = [];
-	}
-	if (!existing.employeeProfile?.auditLog?.length) {
-		initFields["employeeProfile.auditLog"] = [];
-	}
+  const updated = await updateEmployeeProfile(id, orgId, fields, []);
+  if (!updated) throw new NotFoundError('Employee');
 
-	const updated = await updateEmployeeProfile(id, orgId, fields, []);
-	if (!updated) throw new NotFoundError("Employee");
+  // Si isEmployee acaba de activarse → generar checklist automáticamente
+  const wasEmployee    = existing.employeeProfile?.isEmployee ?? false;
+  const isNowEmployee  = fields.isEmployee === true;
+  const checklistEmpty = (updated.employeeProfile?.checklist?.length ?? 0) === 0;
 
-	// Si isEmployee acaba de activarse → generar checklist automáticamente
-	const wasEmployee = existing.employeeProfile?.isEmployee ?? false;
-	const isNowEmployee = fields.isEmployee === true;
-	const checklistEmpty =
-		(updated.employeeProfile?.checklist?.length ?? 0) === 0;
+  if ((!wasEmployee && isNowEmployee) || (isNowEmployee && checklistEmpty)) {
+    const newItems = buildChecklist();
 
-	if ((!wasEmployee && isNowEmployee) || (isNowEmployee && checklistEmpty)) {
-		const newItems = buildChecklist();
+    if (newItems.length > 0) {
+      await addChecklistItems(id, orgId, newItems);
+      logger.info(
+        { employeeId: id, itemsAdded: newItems.length },
+        'Checklist auto-generated on isEmployee activation',
+      );
+    }
+  }
 
-		if (newItems.length > 0) {
-			await addChecklistItems(id, orgId, newItems);
+  const final = await findEmployeeById(id, orgId);
+  if (!final) throw new NotFoundError('Employee');
 
-			logger.info(
-				{employeeId: id, itemsAdded: newItems.length},
-				"Checklist auto-generated on isEmployee activation",
-			);
-		}
-	}
+  logger.info(
+    { employeeId: id, changedFields: Object.keys(fields).length, actorId },
+    'Employee profile updated',
+  );
 
-	// Retornar el empleado actualizado con checklist
-	const final = await findEmployeeById(id, orgId);
-	if (!final) throw new NotFoundError("Employee");
-
-	logger.info(
-		{employeeId: id, changedFields: Object.keys(fields).length, actorId},
-		"Employee profile updated",
-	);
-
-	return final;
+  return final;
 }
 
 // ── Emergency Contacts ─────────────────────────────────────────────────────

@@ -70,6 +70,47 @@ const EMPLOYEE_PROJECTION = {
 	"employeeProfile.bankAccounts.createdAt": 1,
 	// auditLog excluido por default
 } as const;
+
+
+// ── Helper — inicializar arrays del employeeProfile ────────────────────────
+
+export async function initEmployeeArrays(
+  id: string,
+  orgId: string,
+): Promise<void> {
+  const setFields: Record<string, unknown> = {};
+
+  // Solo inicializar campos que no existen
+  const doc = await getUserCollection().findOne(
+    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
+    {
+      projection: {
+        'employeeProfile.bankAccounts':      1,
+        'employeeProfile.emergencyContacts': 1,
+        'employeeProfile.documents':         1,
+        'employeeProfile.checklist':         1,
+        'employeeProfile.auditLog':          1,
+      },
+    },
+  );
+
+  const ep = doc?.employeeProfile;
+
+  if (!Array.isArray(ep?.bankAccounts))      setFields['employeeProfile.bankAccounts']      = [];
+  if (!Array.isArray(ep?.emergencyContacts)) setFields['employeeProfile.emergencyContacts'] = [];
+  if (!Array.isArray(ep?.documents))         setFields['employeeProfile.documents']         = [];
+  if (!Array.isArray(ep?.checklist))         setFields['employeeProfile.checklist']         = [];
+  if (!Array.isArray(ep?.auditLog))          setFields['employeeProfile.auditLog']          = [];
+
+  if (Object.keys(setFields).length > 0) {
+    await getUserCollection().updateOne(
+      { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
+      { $set: setFields },
+    );
+  }
+}
+
+
 // ── Conversión ─────────────────────────────────────────────────────────────
 
 function toUser ( doc: UserDocument ): User
@@ -341,6 +382,16 @@ export async function addBankAccount(
 		isDefault: data.isDefault,
 		createdAt: new Date(),
 	};
+
+	  // Inicializar bankAccounts si no existe
+  await getUserCollection().updateOne(
+    {
+      _id:   new ObjectId(id),
+      orgId: new ObjectId(orgId),
+      'employeeProfile.bankAccounts': { $exists: false },
+    },
+    { $set: { 'employeeProfile.bankAccounts': [] } },
+  );
 
 	// Si isDefault → desmarcar las demás
 	if (data.isDefault) {
