@@ -63,7 +63,8 @@ export async function validateRFC(
   
   logger.info({ rfc: dto.rfc }, 'Validating RFC');
 
-  const client = getClient();
+  const client =
+    getClient();
 
   const body = [
     {
