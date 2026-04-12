@@ -1,7 +1,7 @@
 import {ObjectId} from "mongodb";
 
-import {getUserCollection} from "../users/user.model";
-import type {User, UserDocument} from "../users/user.types";
+import {getUserCollection} from "../../users/user.model";
+import type {User, UserDocument} from "../../users/user.types";
 
 import {
 	encryptAccountNumber,

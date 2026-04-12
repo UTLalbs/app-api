@@ -9,7 +9,7 @@ import {getRedisClient, disconnectRedis} from "./config/redis";
 import { registerEmployeeAlertsJob } from "./infrastructure/jobs/employee.alerts.job";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
-import { createDocumentCatalogIndexes } from './modules/hr/document-catalog.model';
+import { createDocumentCatalogIndexes } from './modules/hr/document-catalog/document-catalog.model';
 import { createNotificationIndexes } from "./modules/notifications/notification.model";
 import { createOrganizationIndexes } from "./modules/organizations/organization.model";
 import { createRoleIndexes } from "./modules/roles/role.model";

@@ -1,6 +1,6 @@
 import type {Request, Response} from "express";
 
-import {asyncHandler} from "../../shared/utils/asyncHandler";
+import {asyncHandler} from "../../../shared/utils/asyncHandler";
 
 import {
 	listEmployees,

@@ -8,7 +8,7 @@ import {
   CacheTTL,
 } from '../../infrastructure/cache/cache.service';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError';
-import { initDocumentCatalogForOrg } from '../hr/document-catalog.service';
+import { initDocumentCatalogForOrg } from '../hr/document-catalog/document-catalog.service';
 
 
 import {

@@ -1,6 +1,6 @@
 import type { ObjectId } from 'mongodb';
 
-import type { EmployeeProfile } from '../employees/employee.types';
+import type { EmployeeProfile } from '../hr/employees/employee.types';
 
 
 // ── Enums ──────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import {ObjectId} from "mongodb";
 
-import {logger} from "../../config/logger";
+import {logger} from "../../../config/logger";
 import {
 	validateFile,
 	uploadFile,
@@ -8,9 +8,9 @@ import {
 	getPresignedUrl,
 	generateS3Key,
 	extractKeyFromUrl,
-} from "../../infrastructure/storage/s3.service";
-import {NotFoundError, ForbiddenError} from "../../shared/errors/AppError";
-import type {User} from "../users/user.types";
+} from "../../../infrastructure/storage/s3.service";
+import {NotFoundError, ForbiddenError} from "../../../shared/errors/AppError";
+import type {User} from "../../users/user.types";
 
 import {buildChecklist} from "./employee.checklist";
 import {

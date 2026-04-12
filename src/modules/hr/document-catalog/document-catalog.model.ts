@@ -1,7 +1,7 @@
 import type { Collection } from 'mongodb';
 
-import { getDb } from '../../config/database';
-import { logger } from '../../config/logger';
+import { getDb } from '../../../config/database';
+import { logger } from '../../../config/logger';
 
 import type { DocumentCatalogDocument } from './document-catalog.types';
 

@@ -189,7 +189,7 @@ export async function isDocumentTypeInUse(
   orgId: string,
   type:  string,
 ): Promise<boolean> {
-  const { getUserCollection } = await import('../users/user.model');
+ const { getUserCollection } = await import('../../users/user.model');
 
   const count = await getUserCollection().countDocuments({
     orgId:                              new ObjectId(orgId),

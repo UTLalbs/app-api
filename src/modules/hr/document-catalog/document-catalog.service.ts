@@ -1,5 +1,5 @@
-import { logger } from '../../config/logger';
-import { ConflictError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
+import { logger } from '../../../config/logger';
+import { ConflictError, ForbiddenError, NotFoundError } from '../../../shared/errors/AppError';
 
 import
 {
