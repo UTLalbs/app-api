@@ -8,6 +8,7 @@ import {
   CacheTTL,
 } from '../../infrastructure/cache/cache.service';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError';
+import { initDocumentCatalogForOrg } from '../hr/document-catalog.service';
 
 
 import {
@@ -76,6 +77,7 @@ export async function listOrganizations(): Promise<Organization[]> {
 
 export async function registerOrganization(
   dto: CreateOrganizationDto,
+  actorId: string,
 ): Promise<Organization> {
   const slug = dto.slug ?? generateSlug(dto.name);
 
@@ -85,6 +87,11 @@ export async function registerOrganization(
   const org = await createOrganization({ ...dto, slug });
 
   await cacheDel(CacheKeys.orgList());
+
+  // Inicializar catálogo de documentos — fire and forget
+  initDocumentCatalogForOrg(org.id, actorId).catch((err) =>
+    logger.error({ err, orgId: org.id }, 'Failed to seed document catalog'),
+  );
 
   logger.info({ orgId: org.id, slug }, 'Organization registered');
 
