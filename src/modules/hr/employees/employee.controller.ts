@@ -294,7 +294,7 @@ export const generateEmployeeChecklist = asyncHandler(
       String(req.params.id),
       orgId,
       req.user!.id,
-      req.body.profileId ?? null,   // ← agregar
+      req.body.profileId ?? null, 
     );
 
     const checklist = updated.employeeProfile?.checklist ?? [];

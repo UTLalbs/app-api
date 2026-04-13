@@ -94,8 +94,12 @@ export async function updateDocumentProfile(
 
 	if (dto.name !== undefined) setFields.name = dto.name;
 	if (dto.description !== undefined) setFields.description = dto.description;
-	if (dto.documentTypes !== undefined)
-		setFields.documentTypes = dto.documentTypes;
+	if (dto.documentTypes !== undefined) {
+		// Normalizar — asegurar que todos sean { type, required }
+		setFields.documentTypes = dto.documentTypes.map((entry) =>
+			typeof entry === "string" ? {type: entry, required: true} : entry,
+		);
+	}
 
 	const result = await getDocumentProfileCollection().findOneAndUpdate(
 		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
@@ -105,7 +109,6 @@ export async function updateDocumentProfile(
 
 	return result ? toDocumentProfile(result as DocumentProfileDocument) : null;
 }
-
 export async function deleteDocumentProfile(
 	id: string,
 	orgId: string,

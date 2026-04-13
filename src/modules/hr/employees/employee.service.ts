@@ -464,14 +464,19 @@ export async function generateChecklist(
 		const profile = await findDocumentProfileById(profileId, orgId);
 
 		if (profile) {
-			const profileTypes = new Set(profile.documentTypes);
+			// Crear mapa type → required desde el perfil
+			const profileMap = new Map(
+				profile.documentTypes.map((entry) => [entry.type, entry.required]),
+			);
 
 			const itemsToAdd = newItems.map((item) => {
-				const inProfile = profileTypes.has(item.type);
-
-				if (inProfile) {
-					// Item en el perfil → pending
-					return item;
+				if (profileMap.has(item.type)) {
+					// Item en el perfil → pending con required del perfil
+					return {
+						...item,
+						required: profileMap.get(item.type) ?? item.required,
+						status: "pending" as const,
+					};
 				} else {
 					// Item fuera del perfil → waived (not_applicable)
 					return {
@@ -514,6 +519,7 @@ export async function generateChecklist(
 
 	return updated;
 }
+
 export async function addCustomChecklistItem(
 	id: string,
 	orgId: string,
