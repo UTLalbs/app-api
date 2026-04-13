@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { ObjectId } from 'mongodb';
 
 import { getDb, connectDatabase } from '../config/database';
