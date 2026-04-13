@@ -22,7 +22,9 @@
 		"test:integration": "jest --testPathPattern=integration",
 		"docker:up": "docker compose up -d mongodb redis",
 		"docker:down": "docker compose down",
-		"docker:logs": "docker compose logs -f"
+		"docker:logs": "docker compose logs -f",
+		"seed:catalog": "ts-node -r tsconfig-paths/register src/scripts/seed-document-catalog.ts"
+
 	},
 	"keywords": [],
 	"author": "",

@@ -12,15 +12,15 @@ import {errorHandler} from "./middleware/errorHandler";
 import {apiLimiter} from "./middleware/rateLimiter";
 import {requestId} from "./middleware/requestId";
 import {authRouter} from "./modules/auth/auth.routes";
-import { documentCatalogRouter } from './modules/hr/document-catalog/document-catalog.routes';
-import { employeeRouter } from './modules/hr/employees/employee.routes';
+import {documentCatalogRouter} from "./modules/hr/document-catalog/document-catalog.routes";
+import {documentProfileRouter} from "./modules/hr/document-profiles/document-profile.routes";
+import {employeeRouter} from "./modules/hr/employees/employee.routes";
 import {notificationRouter} from "./modules/notifications/notification.routes";
 import {organizationRouter} from "./modules/organizations/organization.routes";
 import {roleRouter} from "./modules/roles/role.routes";
 import {taskRouter} from "./modules/tasks/task.routes";
 import {taxRouter} from "./modules/tax/tax.routes";
-import { userRouter } from "./modules/users/user.routes";
-
+import {userRouter} from "./modules/users/user.routes";
 
 export function createApp(httpLogger: RequestHandler): express.Application {
 	const app = express();
@@ -81,8 +81,9 @@ export function createApp(httpLogger: RequestHandler): express.Application {
 	app.use("/api/v1/tax", apiLimiter, taxRouter);
 	app.use("/api/v1/tasks", apiLimiter, taskRouter);
 	app.use("/api/v1/notifications", apiLimiter, notificationRouter);
-	app.use( "/api/v1/employees", apiLimiter, employeeRouter );
-	app.use("/api/v1/document-catalog", apiLimiter, documentCatalogRouter);
+	app.use("/api/v1/employees", apiLimiter, employeeRouter);
+	app.use("/api/v1/hr/document-catalog", apiLimiter, documentCatalogRouter);
+	app.use("/api/v1/hr/document-profiles", apiLimiter, documentProfileRouter);
 
 	// ── Swagger UI ─────────────────────────────────────────────────────────────
 	if (env.NODE_ENV !== "production") {

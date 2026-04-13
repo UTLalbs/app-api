@@ -3,30 +3,41 @@ import pinoHttp from "pino-http";
 import {createApp} from "./app";
 import {connectDatabase, disconnectDatabase} from "./config/database";
 import {env} from "./config/env";
-import { httpLoggerOptions } from "./config/http-logger";
+import {httpLoggerOptions} from "./config/http-logger";
 import {logger} from "./config/logger";
 import {getRedisClient, disconnectRedis} from "./config/redis";
-import { registerEmployeeAlertsJob } from "./infrastructure/jobs/employee.alerts.job";
+import {registerEmployeeAlertsJob} from "./infrastructure/jobs/employee.alerts.job";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
-import { createDocumentCatalogIndexes } from './modules/hr/document-catalog/document-catalog.model';
-import { createNotificationIndexes } from "./modules/notifications/notification.model";
-import { createOrganizationIndexes } from "./modules/organizations/organization.model";
-import { createRoleIndexes } from "./modules/roles/role.model";
-import { seedRoles } from "./modules/roles/role.seed";
-import { createTaskIndexes } from './modules/tasks/task.model';
-import { createTokenIndexes } from "./modules/tokens/token.model";
-import { createUserIndexes } from "./modules/users/user.model";
+import {createDocumentCatalogIndexes} from "./modules/hr/document-catalog/document-catalog.model";
+import {createDocumentProfileIndexes} from "./modules/hr/document-profiles/document-profile.model";
+import {createNotificationIndexes} from "./modules/notifications/notification.model";
+import {createOrganizationIndexes} from "./modules/organizations/organization.model";
+import {createRoleIndexes} from "./modules/roles/role.model";
+import {seedRoles} from "./modules/roles/role.seed";
+import {createTaskIndexes} from "./modules/tasks/task.model";
+import {createTokenIndexes} from "./modules/tokens/token.model";
+import {createUserIndexes} from "./modules/users/user.model";
 
 async function bootstrap(): Promise<void> {
 	//  Conectar base de datos
 	await connectDatabase();
 
 	// Índices — orden no importa, son independientes
-  await Promise.all( [ createUserIndexes(), createOrganizationIndexes(), createRoleIndexes(), createTokenIndexes() , createTaskIndexes(), createNotificationIndexes(), createDocumentCatalogIndexes(), registerEmployeeAlertsJob()] );
-  
-  // Seed — crea o actualiza roles del sistema
-  await seedRoles();
+	await Promise.all([
+		createUserIndexes(),
+		createOrganizationIndexes(),
+		createRoleIndexes(),
+		createTokenIndexes(),
+		createTaskIndexes(),
+		createNotificationIndexes(),
+		createDocumentCatalogIndexes(),
+		createDocumentProfileIndexes(),
+		registerEmployeeAlertsJob(),
+	]);
+
+	// Seed — crea o actualiza roles del sistema
+	await seedRoles();
 
 	// Inicializar OIDC strategies en paralelo
 	await Promise.all([initGoogleStrategy(), initMicrosoftStrategy()]);
