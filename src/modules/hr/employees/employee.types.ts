@@ -301,6 +301,7 @@ export interface EmployeeProfile {
 	position: EmployeePosition | null;
 	department: EmployeeDepartment | null;
 	managerId: ObjectId | null;
+	profileId: ObjectId | null;
 	dateOfHire: Date | null;
 	employmentStatus: EmploymentStatus;
 	curp: string | null;

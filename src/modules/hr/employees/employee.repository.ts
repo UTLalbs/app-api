@@ -47,6 +47,7 @@ const EMPLOYEE_PROJECTION = {
 	"employeeProfile.position": 1,
 	"employeeProfile.department": 1,
 	"employeeProfile.managerId": 1,
+	"employeeProfile.profileId": 1,
 	"employeeProfile.dateOfHire": 1,
 	"employeeProfile.employmentStatus": 1,
 	"employeeProfile.curp": 1,
@@ -71,50 +72,51 @@ const EMPLOYEE_PROJECTION = {
 	// auditLog excluido por default
 } as const;
 
-
 // ── Helper — inicializar arrays del employeeProfile ────────────────────────
 
 export async function initEmployeeArrays(
-  id: string,
-  orgId: string,
+	id: string,
+	orgId: string,
 ): Promise<void> {
-  const setFields: Record<string, unknown> = {};
+	const setFields: Record<string, unknown> = {};
 
-  // Solo inicializar campos que no existen
-  const doc = await getUserCollection().findOne(
-    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
-    {
-      projection: {
-        'employeeProfile.bankAccounts':      1,
-        'employeeProfile.emergencyContacts': 1,
-        'employeeProfile.documents':         1,
-        'employeeProfile.checklist':         1,
-        'employeeProfile.auditLog':          1,
-      },
-    },
-  );
+	// Solo inicializar campos que no existen
+	const doc = await getUserCollection().findOne(
+		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
+		{
+			projection: {
+				"employeeProfile.bankAccounts": 1,
+				"employeeProfile.emergencyContacts": 1,
+				"employeeProfile.documents": 1,
+				"employeeProfile.checklist": 1,
+				"employeeProfile.auditLog": 1,
+			},
+		},
+	);
 
-  const ep = doc?.employeeProfile;
+	const ep = doc?.employeeProfile;
 
-  if (!Array.isArray(ep?.bankAccounts))      setFields['employeeProfile.bankAccounts']      = [];
-  if (!Array.isArray(ep?.emergencyContacts)) setFields['employeeProfile.emergencyContacts'] = [];
-  if (!Array.isArray(ep?.documents))         setFields['employeeProfile.documents']         = [];
-  if (!Array.isArray(ep?.checklist))         setFields['employeeProfile.checklist']         = [];
-  if (!Array.isArray(ep?.auditLog))          setFields['employeeProfile.auditLog']          = [];
+	if (!Array.isArray(ep?.bankAccounts))
+		setFields["employeeProfile.bankAccounts"] = [];
+	if (!Array.isArray(ep?.emergencyContacts))
+		setFields["employeeProfile.emergencyContacts"] = [];
+	if (!Array.isArray(ep?.documents))
+		setFields["employeeProfile.documents"] = [];
+	if (!Array.isArray(ep?.checklist))
+		setFields["employeeProfile.checklist"] = [];
+	if (!Array.isArray(ep?.auditLog)) setFields["employeeProfile.auditLog"] = [];
 
-  if (Object.keys(setFields).length > 0) {
-    await getUserCollection().updateOne(
-      { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
-      { $set: setFields },
-    );
-  }
+	if (Object.keys(setFields).length > 0) {
+		await getUserCollection().updateOne(
+			{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
+			{$set: setFields},
+		);
+	}
 }
-
 
 // ── Conversión ─────────────────────────────────────────────────────────────
 
-function toUser ( doc: UserDocument ): User
-{
+function toUser(doc: UserDocument): User {
 	const ep = doc.employeeProfile;
 
 	return {
@@ -134,20 +136,22 @@ function toUser ( doc: UserDocument ): User
 			name: r.name,
 		})),
 		employeeProfile: ep
-      ? {
-          ...ep,
-          emergencyContacts: Array.isArray(ep.emergencyContacts) ? ep.emergencyContacts : [],
-          bankAccounts:      Array.isArray(ep.bankAccounts)      ? ep.bankAccounts      : [],
-          documents:         Array.isArray(ep.documents)         ? ep.documents         : [],
-          checklist:         Array.isArray(ep.checklist)         ? ep.checklist         : [],
-          auditLog:          Array.isArray(ep.auditLog)          ? ep.auditLog          : [],
-          vehicleOperator:   ep.vehicleOperator ?? null,
-          currentAddress:    ep.currentAddress ?? {
-            sameAsFiscal: true,
-            address:      null,
-          },
-        }
-      : null,
+			? {
+					...ep,
+					emergencyContacts: Array.isArray(ep.emergencyContacts)
+						? ep.emergencyContacts
+						: [],
+					bankAccounts: Array.isArray(ep.bankAccounts) ? ep.bankAccounts : [],
+					documents: Array.isArray(ep.documents) ? ep.documents : [],
+					checklist: Array.isArray(ep.checklist) ? ep.checklist : [],
+					auditLog: Array.isArray(ep.auditLog) ? ep.auditLog : [],
+					vehicleOperator: ep.vehicleOperator ?? null,
+					currentAddress: ep.currentAddress ?? {
+						sameAsFiscal: true,
+						address: null,
+					},
+				}
+			: null,
 		clientMemberships: doc.clientMemberships
 			? doc.clientMemberships.map((m) => ({
 					clientId: m.clientId.toHexString(),
@@ -383,15 +387,15 @@ export async function addBankAccount(
 		createdAt: new Date(),
 	};
 
-	  // Inicializar bankAccounts si no existe
-  await getUserCollection().updateOne(
-    {
-      _id:   new ObjectId(id),
-      orgId: new ObjectId(orgId),
-      'employeeProfile.bankAccounts': { $exists: false },
-    },
-    { $set: { 'employeeProfile.bankAccounts': [] } },
-  );
+	// Inicializar bankAccounts si no existe
+	await getUserCollection().updateOne(
+		{
+			_id: new ObjectId(id),
+			orgId: new ObjectId(orgId),
+			"employeeProfile.bankAccounts": {$exists: false},
+		},
+		{$set: {"employeeProfile.bankAccounts": []}},
+	);
 
 	// Si isDefault → desmarcar las demás
 	if (data.isDefault) {
@@ -476,111 +480,111 @@ export async function removeBankAccount(
 // ── Documents ──────────────────────────────────────────────────────────────
 
 export async function addEmployeeDocument(
-  id: string,
-  orgId: string,
-  doc: Omit<EmployeeDocument, '_id'>,
+	id: string,
+	orgId: string,
+	doc: Omit<EmployeeDocument, "_id">,
 ): Promise<EmployeeDocument | null> {
-  if (!ObjectId.isValid(id)) return null;
+	if (!ObjectId.isValid(id)) return null;
 
-  const newDoc: EmployeeDocument = { _id: new ObjectId(), ...doc };
+	const newDoc: EmployeeDocument = {_id: new ObjectId(), ...doc};
 
-  // Verificar si existe documento con mismo type — marcar como reemplazado
-  const existing = await getUserCollection().findOne(
-    {
-      _id:   new ObjectId(id),
-      orgId: new ObjectId(orgId),
-      'employeeProfile.documents.type': doc.type,
-    },
-    { projection: { 'employeeProfile.documents.$': 1 } },
-  );
+	// Verificar si existe documento con mismo type — marcar como reemplazado
+	const existing = await getUserCollection().findOne(
+		{
+			_id: new ObjectId(id),
+			orgId: new ObjectId(orgId),
+			"employeeProfile.documents.type": doc.type,
+		},
+		{projection: {"employeeProfile.documents.$": 1}},
+	);
 
-  const existingDoc = existing?.employeeProfile?.documents?.[0];
+	const existingDoc = existing?.employeeProfile?.documents?.[0];
 
-  if (existingDoc) {
-    // Marcar documento anterior como reemplazado
-    await getUserCollection().updateOne(
-      {
-        _id:   new ObjectId(id),
-        orgId: new ObjectId(orgId),
-        'employeeProfile.documents._id': existingDoc._id,
-      },
-      {
-        $set: {
-          'employeeProfile.documents.$.replacedBy': newDoc._id,
-          updatedAt: new Date(),
-        },
-      },
-    );
-  }
+	if (existingDoc) {
+		// Marcar documento anterior como reemplazado
+		await getUserCollection().updateOne(
+			{
+				_id: new ObjectId(id),
+				orgId: new ObjectId(orgId),
+				"employeeProfile.documents._id": existingDoc._id,
+			},
+			{
+				$set: {
+					"employeeProfile.documents.$.replacedBy": newDoc._id,
+					updatedAt: new Date(),
+				},
+			},
+		);
+	}
 
-  // Actualizar checklist si existe item con mismo type
-  await getUserCollection().updateOne(
-    {
-      _id:   new ObjectId(id),
-      orgId: new ObjectId(orgId),
-      'employeeProfile.checklist.type': doc.type,
-    },
-    {
-      $set: {
-        'employeeProfile.checklist.$.status':        'complete',
-        'employeeProfile.checklist.$.documentId':    newDoc._id,
-        'employeeProfile.checklist.$.lastRenewedAt': new Date(),
-        updatedAt: new Date(),
-      },
-    },
-  );
+	// Actualizar checklist si existe item con mismo type
+	await getUserCollection().updateOne(
+		{
+			_id: new ObjectId(id),
+			orgId: new ObjectId(orgId),
+			"employeeProfile.checklist.type": doc.type,
+		},
+		{
+			$set: {
+				"employeeProfile.checklist.$.status": "complete",
+				"employeeProfile.checklist.$.documentId": newDoc._id,
+				"employeeProfile.checklist.$.lastRenewedAt": new Date(),
+				updatedAt: new Date(),
+			},
+		},
+	);
 
-  // Agregar nuevo documento
-  await getUserCollection().updateOne(
-    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
-    {
-      $push: { 'employeeProfile.documents': newDoc },
-      $set:  { updatedAt: new Date() },
-    },
-  );
+	// Agregar nuevo documento
+	await getUserCollection().updateOne(
+		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
+		{
+			$push: {"employeeProfile.documents": newDoc},
+			$set: {updatedAt: new Date()},
+		},
+	);
 
-  return newDoc;
+	return newDoc;
 }
 
 export async function updateEmployeeDocument(
-  id: string,
-  orgId: string,
-  docId: string,
-  fields: {
-    status?:           DocumentStatus;
-    notes?:            string | null;
-    issuedAt?:         Date | null;
-    expiresAt?:        Date | null;
-    alertDays?:        number;
-    hasRenewal?:       boolean;
-    renewalMonths?:    number | null;
-    renewalFrom?:      RenewalFrom;
-    renewalStartDate?: Date | null;
-    verifiedAt?:       Date | null;
-    verifiedBy?:       ObjectId | null;
-  },
+	id: string,
+	orgId: string,
+	docId: string,
+	fields: {
+		status?: DocumentStatus;
+		notes?: string | null;
+		issuedAt?: Date | null;
+		expiresAt?: Date | null;
+		alertDays?: number;
+		hasRenewal?: boolean;
+		renewalMonths?: number | null;
+		renewalFrom?: RenewalFrom;
+		renewalStartDate?: Date | null;
+		verifiedAt?: Date | null;
+		verifiedBy?: ObjectId | null;
+	},
 ): Promise<User | null> {
-  if (!ObjectId.isValid(id) || !ObjectId.isValid(docId)) return null;
+	if (!ObjectId.isValid(id) || !ObjectId.isValid(docId)) return null;
 
-  const setFields: Record<string, unknown> = { updatedAt: new Date() };
+	const setFields: Record<string, unknown> = {updatedAt: new Date()};
 
-  for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined) {
-      setFields[`employeeProfile.documents.$.${key}`] = value;
-    }
-  }
+	for (const [key, value] of Object.entries(fields)) {
+		if (value !== undefined) {
+			setFields[`employeeProfile.documents.$.${key}`] = value;
+		}
+	}
 
-  const result = await getUserCollection().findOneAndUpdate(
-    {
-      _id:   new ObjectId(id),
-      orgId: new ObjectId(orgId),
-      'employeeProfile.documents._id': new ObjectId(docId),
-    },
-    { $set: setFields },
-    { returnDocument: 'after', projection: EMPLOYEE_PROJECTION },
-  );
+	const result = await getUserCollection().findOneAndUpdate(
+		{
+			_id: new ObjectId(id),
+			orgId: new ObjectId(orgId),
+			"employeeProfile.documents._id": new ObjectId(docId),
+		},
+		{$set: setFields},
+		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
+	);
 
-  return result ? toUser(result as UserDocument) : null;
+	return result ? toUser(result as UserDocument) : null;
 }
 export async function removeEmployeeDocument(
 	id: string,
@@ -632,7 +636,6 @@ export async function removeEmployeeDocument(
 	return {fileUrl, previousVersions: previousVersionUrls};
 }
 
-
 // ── Checklist ──────────────────────────────────────────────────────────────
 
 export async function addChecklistItems(
@@ -657,46 +660,46 @@ export async function addChecklistItems(
 }
 
 export async function updateChecklistItem(
-  id: string,
-  orgId: string,
-  itemId: string,
-  fields: {
-    required?:     boolean;
-    status?:       ChecklistStatus;
-    documentId?:   ObjectId | null;
-    hasExpiry?:    boolean;
-    alertDays?:    number | null;
-    hasRenewal?:   boolean;
-    renewalMonths?: number | null;
-    renewalFrom?:  RenewalFrom;
-    lastRenewedAt?: Date | null;
-    waivedBy?:     ObjectId | null;
-    waivedAt?:     Date | null;
-    waivedReason?: string | null;
-    waivedNote?:   string | null;
-  },
+	id: string,
+	orgId: string,
+	itemId: string,
+	fields: {
+		required?: boolean;
+		status?: ChecklistStatus;
+		documentId?: ObjectId | null;
+		hasExpiry?: boolean;
+		alertDays?: number | null;
+		hasRenewal?: boolean;
+		renewalMonths?: number | null;
+		renewalFrom?: RenewalFrom;
+		lastRenewedAt?: Date | null;
+		waivedBy?: ObjectId | null;
+		waivedAt?: Date | null;
+		waivedReason?: string | null;
+		waivedNote?: string | null;
+	},
 ): Promise<User | null> {
-  if (!ObjectId.isValid(id) || !ObjectId.isValid(itemId)) return null;
+	if (!ObjectId.isValid(id) || !ObjectId.isValid(itemId)) return null;
 
-  const setFields: Record<string, unknown> = { updatedAt: new Date() };
+	const setFields: Record<string, unknown> = {updatedAt: new Date()};
 
-  for (const [key, value] of Object.entries(fields)) {
-    if (value !== undefined) {
-      setFields[`employeeProfile.checklist.$.${key}`] = value;
-    }
-  }
+	for (const [key, value] of Object.entries(fields)) {
+		if (value !== undefined) {
+			setFields[`employeeProfile.checklist.$.${key}`] = value;
+		}
+	}
 
-  const result = await getUserCollection().findOneAndUpdate(
-    {
-      _id:   new ObjectId(id),
-      orgId: new ObjectId(orgId),
-      'employeeProfile.checklist._id': new ObjectId(itemId),
-    },
-    { $set: setFields },
-    { returnDocument: 'after', projection: EMPLOYEE_PROJECTION },
-  );
+	const result = await getUserCollection().findOneAndUpdate(
+		{
+			_id: new ObjectId(id),
+			orgId: new ObjectId(orgId),
+			"employeeProfile.checklist._id": new ObjectId(itemId),
+		},
+		{$set: setFields},
+		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
+	);
 
-  return result ? toUser(result as UserDocument) : null;
+	return result ? toUser(result as UserDocument) : null;
 }
 export async function removeChecklistItem(
 	id: string,
@@ -719,54 +722,60 @@ export async function removeChecklistItem(
 // ── Audit Log ──────────────────────────────────────────────────────────────
 
 export async function findAuditLog(
-  id: string,
-  orgId: string,
-  filter: { action?: string; entityType?: string; from?: Date; to?: Date; limit?: number },
+	id: string,
+	orgId: string,
+	filter: {
+		action?: string;
+		entityType?: string;
+		from?: Date;
+		to?: Date;
+		limit?: number;
+	},
 ): Promise<AuditLogEntry[]> {
-  if (!ObjectId.isValid(id)) return [];
+	if (!ObjectId.isValid(id)) return [];
 
-  const doc = await getUserCollection().findOne(
-    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
-    { projection: { 'employeeProfile.auditLog': 1 } },
-  );
+	const doc = await getUserCollection().findOne(
+		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
+		{projection: {"employeeProfile.auditLog": 1}},
+	);
 
-  let entries = doc?.employeeProfile?.auditLog ?? [];
+	let entries = doc?.employeeProfile?.auditLog ?? [];
 
-  if (filter.action) {
-    entries = entries.filter((e) => e.action === filter.action);
-  }
+	if (filter.action) {
+		entries = entries.filter((e) => e.action === filter.action);
+	}
 
-  if (filter.entityType) {
-    entries = entries.filter((e) => e.entityType === filter.entityType);
-  }
+	if (filter.entityType) {
+		entries = entries.filter((e) => e.entityType === filter.entityType);
+	}
 
-  if (filter.from) {
-    entries = entries.filter((e) => e.changedAt >= filter.from!);
-  }
+	if (filter.from) {
+		entries = entries.filter((e) => e.changedAt >= filter.from!);
+	}
 
-  if (filter.to) {
-    entries = entries.filter((e) => e.changedAt <= filter.to!);
-  }
+	if (filter.to) {
+		entries = entries.filter((e) => e.changedAt <= filter.to!);
+	}
 
-  return entries
-    .sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime())
-    .slice(0, filter.limit ?? 50);
+	return entries
+		.sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime())
+		.slice(0, filter.limit ?? 50);
 }
 
 export async function addAuditEntry(
-  id: string,
-  orgId: string,
-  entry: Omit<AuditLogEntry, '_id'>,
+	id: string,
+	orgId: string,
+	entry: Omit<AuditLogEntry, "_id">,
 ): Promise<void> {
-  if (!ObjectId.isValid(id)) return;
+	if (!ObjectId.isValid(id)) return;
 
-  await getUserCollection().updateOne(
-    { _id: new ObjectId(id), orgId: new ObjectId(orgId) },
-    {
-      $push: { 'employeeProfile.auditLog': { _id: new ObjectId(), ...entry } },
-      $set:  { updatedAt: new Date() },
-    },
-  );
+	await getUserCollection().updateOne(
+		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
+		{
+			$push: {"employeeProfile.auditLog": {_id: new ObjectId(), ...entry}},
+			$set: {updatedAt: new Date()},
+		},
+	);
 }
 
 // ── Helpers para alertas (cron job) ───────────────────────────────────────

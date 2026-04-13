@@ -230,10 +230,11 @@ export const updateEmployeeProfileSchema = z.object({
 		position: positionSchema.nullable().optional(),
 		department: departmentSchema.nullable().optional(),
 		managerId: z.string().length(24).nullable().optional(),
+		profileId: z.string().length(24).nullable().optional(),
 		dateOfHire: z.coerce.date().nullable().optional(),
 		employmentStatus: employmentStatusSchema.optional(),
 		curp: z.string().max(18).nullable().optional(),
-		rfc: z.string().max( 13 ).nullable().optional(),
+		rfc: z.string().max(13).nullable().optional(),
 		rfcValidatedAt: z.string().datetime().nullable().optional(),
 		rfcValidatedStatus: z.enum(["pending", "valid", "invalid"]).optional(),
 		razonSocial: z.string().max(200).nullable().optional(),
@@ -375,8 +376,7 @@ export const docIdParamSchema = z.object({
 export const generateChecklistSchema = z.object({
 	params: z.object({id: z.string().length(24)}),
 	body: z.object({
-		employeeType: employeeTypeSchema,
-		position: positionSchema.nullable().optional(),
+		profileId: z.string().length(24).nullable().optional(),
 	}),
 });
 
@@ -394,7 +394,7 @@ export const updateChecklistItemSchema = z.object({
 		id: z.string().length(24),
 		itemId: z.string().length(24),
 	}),
-	body: z.object( {
+	body: z.object({
 		required: z.boolean().optional(),
 		status: z.enum(["complete", "pending", "waived"]).optional(),
 		waivedReason: waivedReasonSchema.nullable().optional(),
@@ -403,7 +403,7 @@ export const updateChecklistItemSchema = z.object({
 		hasExpiry: z.boolean().optional(),
 		hasRenewal: z.boolean().optional(),
 		renewalMonths: z.coerce.number().min(1).max(120).nullable().optional(),
-		renewalFrom: renewalFromSchema.optional(), 
+		renewalFrom: renewalFromSchema.optional(),
 		documentId: z.string().length(24).nullable().optional(),
 	}),
 });

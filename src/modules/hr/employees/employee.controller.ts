@@ -42,6 +42,7 @@ import type {
 	UpdateEmergencyContactInput,
 	UpdateEmployeeProfileInput,
 	UploadDocumentInput,
+	GenerateChecklistInput,
 } from "./employee.validator";
 
 // ── GET /api/v1/employees ──────────────────────────────────────────────────
@@ -286,13 +287,21 @@ export const getChecklist = asyncHandler(
 );
 
 export const generateEmployeeChecklist = asyncHandler(
-	async (req: Request, res: Response) => {
-		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
-		const updated = await generateChecklist(String(req.params.id), orgId);
-		const checklist = updated.employeeProfile?.checklist ?? [];
-		const meta = computeChecklistMeta(checklist);
-		res.json({success: true, data: checklist, meta});
-	},
+  async (req: Request & GenerateChecklistInput, res: Response) => {
+    const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? '';
+
+    const updated = await generateChecklist(
+      String(req.params.id),
+      orgId,
+      req.user!.id,
+      req.body.profileId ?? null,   // ← agregar
+    );
+
+    const checklist = updated.employeeProfile?.checklist ?? [];
+    const meta      = computeChecklistMeta(checklist);
+
+    res.json({ success: true, data: checklist, meta });
+  },
 );
 
 export const createChecklistItem = asyncHandler(

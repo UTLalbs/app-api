@@ -11,6 +11,7 @@ import {
 } from "../../../infrastructure/storage/s3.service";
 import {NotFoundError, ForbiddenError} from "../../../shared/errors/AppError";
 import type {User} from "../../users/user.types";
+import {findDocumentProfileById} from "../document-profiles/document-profile.repository";
 
 import {buildChecklist} from "./employee.checklist";
 import {
@@ -65,46 +66,47 @@ export async function getEmployee(id: string, orgId: string): Promise<User> {
 // ── Actualizar perfil ──────────────────────────────────────────────────────
 
 export async function editEmployeeProfile(
-  id: string,
-  orgId: string,
-  fields: Partial<EmployeeProfile>,
-  actorId: string,
+	id: string,
+	orgId: string,
+	fields: Partial<EmployeeProfile>,
+	actorId: string,
 ): Promise<User> {
-  const existing = await findEmployeeById(id, orgId);
-  if (!existing) throw new NotFoundError('Employee');
+	const existing = await findEmployeeById(id, orgId);
+	if (!existing) throw new NotFoundError("Employee");
 
-  // Inicializar arrays faltantes — delegar al helper
-  await initEmployeeArrays(id, orgId);
+	// Inicializar arrays faltantes — delegar al helper
+	await initEmployeeArrays(id, orgId);
 
-  const updated = await updateEmployeeProfile(id, orgId, fields, []);
-  if (!updated) throw new NotFoundError('Employee');
+	const updated = await updateEmployeeProfile(id, orgId, fields, []);
+	if (!updated) throw new NotFoundError("Employee");
 
-  // Si isEmployee acaba de activarse → generar checklist automáticamente
-  const wasEmployee    = existing.employeeProfile?.isEmployee ?? false;
-  const isNowEmployee  = fields.isEmployee === true;
-  const checklistEmpty = (updated.employeeProfile?.checklist?.length ?? 0) === 0;
+	// Si isEmployee acaba de activarse → generar checklist automáticamente
+	const wasEmployee = existing.employeeProfile?.isEmployee ?? false;
+	const isNowEmployee = fields.isEmployee === true;
+	const checklistEmpty =
+		(updated.employeeProfile?.checklist?.length ?? 0) === 0;
 
-  if ((!wasEmployee && isNowEmployee) || (isNowEmployee && checklistEmpty)) {
-    const newItems = buildChecklist();
+	if ((!wasEmployee && isNowEmployee) || (isNowEmployee && checklistEmpty)) {
+		const newItems = buildChecklist();
 
-    if (newItems.length > 0) {
-      await addChecklistItems(id, orgId, newItems);
-      logger.info(
-        { employeeId: id, itemsAdded: newItems.length },
-        'Checklist auto-generated on isEmployee activation',
-      );
-    }
-  }
+		if (newItems.length > 0) {
+			await addChecklistItems(id, orgId, newItems);
+			logger.info(
+				{employeeId: id, itemsAdded: newItems.length},
+				"Checklist auto-generated on isEmployee activation",
+			);
+		}
+	}
 
-  const final = await findEmployeeById(id, orgId);
-  if (!final) throw new NotFoundError('Employee');
+	const final = await findEmployeeById(id, orgId);
+	if (!final) throw new NotFoundError("Employee");
 
-  logger.info(
-    { employeeId: id, changedFields: Object.keys(fields).length, actorId },
-    'Employee profile updated',
-  );
+	logger.info(
+		{employeeId: id, changedFields: Object.keys(fields).length, actorId},
+		"Employee profile updated",
+	);
 
-  return final;
+	return final;
 }
 
 // ── Emergency Contacts ─────────────────────────────────────────────────────
@@ -441,18 +443,67 @@ export async function getDocumentUrl(
 export async function generateChecklist(
 	id: string,
 	orgId: string,
+	actorId: string,
+	profileId?: string | null,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
 
 	const currentChecklist = existing.employeeProfile?.checklist ?? [];
+	const allItems = buildChecklist();
 
-	const newItems = buildChecklist().filter(
-		(item) => !currentChecklist.some((c) => c.type === item.type),
-	);
+	// Items que ya existen en el checklist
+	const existingTypes = new Set(currentChecklist.map((c) => c.type));
 
+	// Items nuevos — solo los que no existen ya
+	const newItems = allItems.filter((item) => !existingTypes.has(item.type));
 	if (newItems.length === 0) return existing;
 
+	// Si viene profileId → clasificar items según el perfil
+	if (profileId) {
+		const profile = await findDocumentProfileById(profileId, orgId);
+
+		if (profile) {
+			const profileTypes = new Set(profile.documentTypes);
+
+			const itemsToAdd = newItems.map((item) => {
+				const inProfile = profileTypes.has(item.type);
+
+				if (inProfile) {
+					// Item en el perfil → pending
+					return item;
+				} else {
+					// Item fuera del perfil → waived (not_applicable)
+					return {
+						...item,
+						status: "waived" as const,
+						waivedReason: "not_applicable" as const,
+						waivedBy: new ObjectId(actorId),
+						waivedAt: new Date(),
+						waivedNote: "No aplica según el perfil de expediente asignado",
+					};
+				}
+			});
+
+			const updated = await addChecklistItems(id, orgId, itemsToAdd);
+			if (!updated) throw new NotFoundError("Employee");
+
+			logger.info(
+				{
+					employeeId: id,
+					profileId,
+					itemsAdded: itemsToAdd.length,
+					pending: itemsToAdd.filter((i) => i.status === "pending").length,
+					waived: itemsToAdd.filter((i) => i.status === "waived").length,
+				},
+				"Checklist generated with profile",
+			);
+
+			return updated;
+		}
+	}
+
+	// Sin profileId → todos pending (comportamiento actual)
 	const updated = await addChecklistItems(id, orgId, newItems);
 	if (!updated) throw new NotFoundError("Employee");
 
@@ -463,7 +514,6 @@ export async function generateChecklist(
 
 	return updated;
 }
-
 export async function addCustomChecklistItem(
 	id: string,
 	orgId: string,
