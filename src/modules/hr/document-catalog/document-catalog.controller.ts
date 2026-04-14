@@ -7,13 +7,26 @@ import {
 	createDocumentCatalogItem,
 	editDocumentCatalogItem,
 	removeDocumentCatalogItem,
+	getDocumentCatalogUsage,
 } from "./document-catalog.service";
 import type {DocumentCatalogCategory} from "./document-catalog.types";
 import type {
 	CreateDocumentCatalogInput,
 	ListDocumentCatalogInput,
 	UpdateDocumentCatalogInput,
+	DeleteDocumentCatalogInput,
 } from "./document-catalog.validator";
+
+// ── GET /api/v1/hr/document-catalog/:id/usage ─────────────────────────────
+
+export const getDocumentCatalogUsageHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? '';
+    const usage = await getDocumentCatalogUsage(String(req.params.id), orgId);
+    res.json({ success: true, data: usage });
+  },
+);
+
 
 // ── GET /api/v1/hr/document-catalog ───────────────────────────────────────
 
@@ -74,14 +87,15 @@ export const updateDocumentCatalog = asyncHandler(
 	},
 );
 
-// ── DELETE /api/v1/hr/document-catalog/:id ────────────────────────────────
+// ── DELETE /api/v1/hr/document-catalog/:id ─────────────────────────────────
 
 export const deleteDocumentCatalog = asyncHandler(
-	async (req: Request, res: Response) => {
-		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
+  async (req: Request & DeleteDocumentCatalogInput, res: Response) => {
+    const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? '';
+    const force = req.query.force === 'true';
 
-		await removeDocumentCatalogItem(String(req.params.id), orgId);
+    await removeDocumentCatalogItem(String(req.params.id), orgId, force);
 
-		res.status(204).send();
-	},
+    res.status(204).send();
+  },
 );

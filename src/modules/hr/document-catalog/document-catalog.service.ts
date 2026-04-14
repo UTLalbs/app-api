@@ -1,16 +1,23 @@
+import { ObjectId } from 'mongodb';
+
 import { logger } from '../../../config/logger';
+import {
+  deleteFile,
+  extractKeyFromUrl,
+} from '../../../infrastructure/storage/s3.service';
 import { ConflictError, ForbiddenError, NotFoundError } from '../../../shared/errors/AppError';
 
-import
-{
-	createDocumentCatalogEntry,
-	deleteDocumentCatalogEntry,
-	findDocumentCatalog,
-	findDocumentCatalogById,
-	findDocumentCatalogByType,
-	isDocumentTypeInUse,
-	seedDocumentCatalog,
-	updateDocumentCatalogEntry,
+import {
+  createDocumentCatalogEntry,
+  deleteDocumentCatalogEntry,
+  findDocumentCatalog,
+  findDocumentCatalogById,
+  findDocumentCatalogByType,
+  findEmployeesUsingType,
+  findProfilesUsingType,
+  removeTypeFromProfiles,
+  seedDocumentCatalog,
+  updateDocumentCatalogEntry,
 } from './document-catalog.repository';
 import { DOCUMENT_CATALOG_SEED } from './document-catalog.seed';
 import type {
@@ -32,7 +39,7 @@ export async function listDocumentCatalog(
 // ── Crear documento personalizado ──────────────────────────────────────────
 
 export async function createDocumentCatalogItem(
-  orgId:  string,
+  orgId:   string,
   actorId: string,
   data: {
     name:       string;
@@ -42,15 +49,13 @@ export async function createDocumentCatalogItem(
     hasRenewal: boolean;
   },
 ): Promise<DocumentCatalog> {
-  // Generar type desde el nombre — lowercase + guiones
   const type = data.name
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')  // quitar acentos
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_|_$/g, '');
 
-  // Verificar que el type no exista ya en la org
   const existing = await findDocumentCatalogByType(orgId, type);
   if (existing) {
     throw new ConflictError(
@@ -67,14 +72,11 @@ export async function createDocumentCatalogItem(
     hasExpiry:  data.hasExpiry,
     hasRenewal: data.hasRenewal,
     isSystem:   false,
-    isActive:   false,   // ← inactivo por default
+    isActive:   false,
     createdBy:  actorId,
   });
 
-  logger.info(
-    { orgId, type, actorId },
-    'Document catalog item created',
-  );
+  logger.info({ orgId, type, actorId }, 'Document catalog item created');
 
   return item;
 }
@@ -82,9 +84,9 @@ export async function createDocumentCatalogItem(
 // ── Actualizar documento ───────────────────────────────────────────────────
 
 export async function editDocumentCatalogItem(
-  id:     string,
-  orgId:  string,
-  dto:    UpdateDocumentCatalogDto,
+  id:   string,
+  orgId: string,
+  dto:  UpdateDocumentCatalogDto,
 ): Promise<DocumentCatalog> {
   const existing = await findDocumentCatalogById(id, orgId);
   if (!existing) throw new NotFoundError('DocumentCatalog');
@@ -97,34 +99,131 @@ export async function editDocumentCatalogItem(
   return updated;
 }
 
+// ── Obtener uso del documento ──────────────────────────────────────────────
+
+export async function getDocumentCatalogUsage(
+  id:    string,
+  orgId: string,
+): Promise<{
+  profiles:  { id: string; name: string }[];
+  employees: { id: string; displayName: string }[];
+}> {
+  const existing = await findDocumentCatalogById(id, orgId);
+  if (!existing) throw new NotFoundError('DocumentCatalog');
+
+  const [profiles, employees] = await Promise.all([
+    findProfilesUsingType(orgId, existing.type),
+    findEmployeesUsingType(orgId, existing.type),
+  ]);
+
+  return { profiles, employees };
+}
+
 // ── Eliminar documento ─────────────────────────────────────────────────────
 
 export async function removeDocumentCatalogItem(
   id:    string,
   orgId: string,
+  force: boolean = false,
 ): Promise<void> {
   const existing = await findDocumentCatalogById(id, orgId);
   if (!existing) throw new NotFoundError('DocumentCatalog');
 
-  // No se pueden eliminar documentos del sistema
   if (existing.isSystem) {
-    throw new ForbiddenError(
-      'No se pueden eliminar documentos del sistema',
-    );
+    throw new ForbiddenError('No se pueden eliminar documentos del sistema');
   }
 
-  // Verificar si está en uso en algún empleado
-  const inUse = await isDocumentTypeInUse(orgId, existing.type);
-  if (inUse) {
+  const [profiles, employees] = await Promise.all([
+    findProfilesUsingType(orgId, existing.type),
+    findEmployeesUsingType(orgId, existing.type),
+  ]);
+
+  const inUse = profiles.length > 0 || employees.length > 0;
+
+  if (inUse && !force) {
     throw new ConflictError(
-      `El documento "${existing.name}" está en uso en perfiles de empleados`,
+      `El documento "${existing.name}" está en uso en ${profiles.length} perfiles y ${employees.length} empleados`,
     );
   }
 
+  if (force && inUse) {
+    const { getUserCollection } = await import('../../users/user.model');
+
+    // 1 — Procesar cada empleado
+    for (const emp of employees) {
+      const user = await getUserCollection().findOne(
+        { _id: new ObjectId(emp.id) },
+        {
+          projection: {
+            'employeeProfile.documents': 1,
+            'employeeProfile.checklist': 1,
+          },
+        },
+      );
+
+      const empDocs      = user?.employeeProfile?.documents ?? [];
+      const empDoc = empDocs.find(
+        (d: { type: string }) => d.type === existing.type,
+      );
+
+      if (empDoc) {
+        const docWithMeta = empDoc as {
+          fileUrl:          string;
+          previousVersions: { fileUrl: string }[];
+        };
+
+        // b — Eliminar archivos del bucket — fire and forget
+        const urls = [
+          docWithMeta.fileUrl,
+          ...(docWithMeta.previousVersions ?? []).map((v) => v.fileUrl),
+        ];
+
+        for (const url of urls) {
+          const key = extractKeyFromUrl(url);
+          deleteFile(key).catch((err) =>
+            logger.error({ err, key }, 'Failed to delete file from S3 on force delete'),
+          );
+        }
+
+        // c — Eliminar documento del array
+        await getUserCollection().updateOne(
+          { _id: new ObjectId(emp.id) },
+          {
+            $pull: { 'employeeProfile.documents': { type: existing.type } as never },
+            $set:  { updatedAt: new Date() },
+          },
+        );
+      }
+
+      // d — Eliminar checklist item
+      await getUserCollection().updateOne(
+        { _id: new ObjectId(emp.id) },
+        {
+          $pull: { 'employeeProfile.checklist': { type: existing.type } as never },
+          $set:  { updatedAt: new Date() },
+        },
+      );
+    }
+
+    // 2 — Eliminar de todos los perfiles
+    await removeTypeFromProfiles(orgId, existing.type);
+
+    logger.info(
+      {
+        type:           existing.type,
+        orgId,
+        profilesClean:  profiles.length,
+        employeesClean: employees.length,
+      },
+      'Force deleted — cleaned up profiles and employees',
+    );
+  }
+
+  // 3 — Eliminar del catálogo
   const deleted = await deleteDocumentCatalogEntry(id, orgId);
   if (!deleted) throw new NotFoundError('DocumentCatalog');
 
-  logger.info({ id, orgId }, 'Document catalog item deleted');
+  logger.info({ id, orgId, force }, 'Document catalog item deleted');
 }
 
 // ── Seed — inicializar catálogo de org nueva ──────────────────────────────

@@ -9,17 +9,28 @@ import {
 	createDocumentCatalog,
 	updateDocumentCatalog,
 	deleteDocumentCatalog,
+	getDocumentCatalogUsageHandler,
 } from "./document-catalog.controller";
 import {
 	listDocumentCatalogSchema,
 	createDocumentCatalogSchema,
 	updateDocumentCatalogSchema,
 	catalogIdParamSchema,
+	deleteDocumentCatalogSchema
 } from "./document-catalog.validator";
 
 export const documentCatalogRouter = Router();
 
-documentCatalogRouter.use(authenticate);
+documentCatalogRouter.use( authenticate );
+
+// GET /api/v1/hr/document-catalog/:id/usage
+documentCatalogRouter.get(
+  '/:id/usage',
+  validate(catalogIdParamSchema),
+  authorize('employees', 'read'),
+  getDocumentCatalogUsageHandler,
+);
+
 
 // GET /api/v1/hr/document-catalog
 documentCatalogRouter.get(
@@ -47,8 +58,8 @@ documentCatalogRouter.patch(
 
 // DELETE /api/v1/hr/document-catalog/:id
 documentCatalogRouter.delete(
-	"/:id",
-	validate(catalogIdParamSchema),
-	authorize("employees", "delete"),
-	deleteDocumentCatalog,
+  '/:id',
+  validate(deleteDocumentCatalogSchema),
+  authorize('employees', 'delete'),
+  deleteDocumentCatalog,
 );

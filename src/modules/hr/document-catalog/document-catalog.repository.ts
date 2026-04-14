@@ -1,5 +1,7 @@
 import { ObjectId } from 'mongodb';
 
+import { getDocumentProfileCollection } from '../document-profiles/document-profile.model';
+
 import { getDocumentCatalogCollection } from './document-catalog.model';
 import type {
   CreateDocumentCatalogDto,
@@ -8,6 +10,7 @@ import type {
   DocumentCatalogQueryFilter,
   DocumentCatalogSeedItem,
   UpdateDocumentCatalogDto,
+  
 } from './document-catalog.types';
 
 // ── Conversión documento → dominio ─────────────────────────────────────────
@@ -197,4 +200,60 @@ export async function isDocumentTypeInUse(
   });
 
   return count > 0;
+}
+
+
+// ── Buscar uso del tipo en perfiles ───────────────────────────────────────
+
+export async function findProfilesUsingType(
+  orgId: string,
+  type:  string,
+): Promise<{ id: string; name: string }[]> {
+  const docs = await getDocumentProfileCollection()
+    .find(
+      {
+        orgId:                  new ObjectId(orgId),
+        'documentTypes.type':   type,
+      },
+      { projection: { _id: 1, name: 1 } },
+    )
+    .toArray();
+
+  return docs.map((d) => ({ id: d._id.toHexString(), name: d.name }));
+}
+
+// ── Buscar empleados con el type en checklist ──────────────────────────────
+
+export async function findEmployeesUsingType(
+  orgId: string,
+  type:  string,
+): Promise<{ id: string; displayName: string }[]> {
+  const { getUserCollection } = await import('../../users/user.model');
+
+  const docs = await getUserCollection()
+    .find(
+      {
+        orgId:                            new ObjectId(orgId),
+        'employeeProfile.checklist.type': type,
+      },
+      { projection: { _id: 1, displayName: 1 } },
+    )
+    .toArray();
+
+  return docs.map((d) => ({
+    id:          d._id.toHexString(),
+    displayName: d.displayName,
+  }));
+}
+
+// ── Eliminar type de todos los perfiles ───────────────────────────────────
+
+export async function removeTypeFromProfiles(
+  orgId: string,
+  type:  string,
+): Promise<void> {
+  await getDocumentProfileCollection().updateMany(
+    { orgId: new ObjectId(orgId) },
+    { $pull: { documentTypes: { type } as unknown as never } },
+  );
 }

@@ -46,6 +46,14 @@ export const updateDocumentCatalogSchema = z.object({
 
 export const catalogIdParamSchema = z.object({
 	params: z.object({id: z.string().length(24)}),
+} );
+
+
+export const deleteDocumentCatalogSchema = z.object({
+  params: z.object({ id: z.string().length(24) }),
+  query:  z.object({
+    force: z.enum(['true', 'false']).optional(),
+  }),
 });
 
 // ── Tipos inferidos ────────────────────────────────────────────────────────
@@ -59,3 +67,5 @@ export type CreateDocumentCatalogInput = z.infer<
 export type UpdateDocumentCatalogInput = z.infer<
 	typeof updateDocumentCatalogSchema
 >;
+
+export type DeleteDocumentCatalogInput = z.infer<typeof deleteDocumentCatalogSchema>;

@@ -12,6 +12,7 @@ import {
 import type {
 	DocumentProfile,
 	UpdateDocumentProfileDto,
+	DocumentTypeEntry,
 } from "./document-profile.types";
 
 export async function listDocumentProfiles(
@@ -26,7 +27,7 @@ export async function createDocumentProfileItem(
 	data: {
 		name: string;
 		description: string | null;
-		documentTypes: string[];
+		documentTypes: DocumentTypeEntry[];
 	},
 ): Promise<DocumentProfile> {
 	const existing = await findDocumentProfileByName(orgId, data.name);
