@@ -326,7 +326,7 @@ export async function editDocument(
 					await updateChecklistItem(
 						id,
 						orgId,
-						checklistItem._id.toHexString(),
+						String(checklistItem._id),
 						{
 							status: "complete",
 							documentId: new ObjectId(docId),
@@ -337,7 +337,7 @@ export async function editDocument(
 					await updateChecklistItem(
 						id,
 						orgId,
-						checklistItem._id.toHexString(),
+						String(checklistItem._id),
 						{
 							status: "pending",
 							documentId: null,

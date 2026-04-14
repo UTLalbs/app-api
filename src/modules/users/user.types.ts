@@ -1,6 +1,6 @@
 import type { ObjectId } from 'mongodb';
 
-import type { EmployeeProfile } from '../hr/employees/employee.types';
+import type { EmployeeProfile, EmployeeProfileDocument } from '../hr/employees/employee.types';
 
 
 // ── Enums ──────────────────────────────────────────────────────────────────
@@ -91,7 +91,7 @@ export interface UserDocument {
   phones:            PhoneEntry[];
   status:            UserStatus;
   roles:             UserRole[];
-  employeeProfile:   EmployeeProfile | null;   // ← importado de employee.types
+  employeeProfile:   EmployeeProfileDocument | null;   // ← importado de employee.types
   clientMemberships: ClientMembership[] | null;
   identities:        UserIdentities;
   preferences:       UserPreferences;

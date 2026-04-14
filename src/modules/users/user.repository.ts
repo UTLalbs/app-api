@@ -1,6 +1,10 @@
 import {ObjectId} from "mongodb";
 
 import {NotFoundError} from "../../shared/errors/AppError";
+import type {
+	EmployeeProfile,
+	EmployeeProfileDocument,
+} from "../hr/employees/employee.types";
 
 import {getUserCollection} from "./user.model";
 import type {
@@ -60,7 +64,10 @@ function toUser(doc: UserDocument): User {
 			roleId: r.roleId.toHexString(),
 			name: r.name,
 		})),
-		employeeProfile: doc.employeeProfile ?? null,
+
+		employeeProfile: doc.employeeProfile
+			? (doc.employeeProfile as unknown as EmployeeProfile)
+			: null,
 		clientMemberships: doc.clientMemberships
 			? doc.clientMemberships.map((m) => ({
 					clientId: m.clientId.toHexString(),
@@ -189,7 +196,9 @@ export async function createUser(dto: CreateUserDto): Promise<User> {
 		phones: dto.phones ?? [],
 		status: "pending",
 		roles,
-		employeeProfile: dto.employeeProfile ?? null,
+		employeeProfile: dto.employeeProfile
+			? (dto.employeeProfile as unknown as EmployeeProfileDocument)
+			: null,
 		clientMemberships: dto.clientMemberships ?? null,
 		identities: {
 			local: null,
@@ -227,7 +236,7 @@ export async function createUser(dto: CreateUserDto): Promise<User> {
 			roleId: r.roleId.toHexString(),
 			name: r.name,
 		})),
-		employeeProfile: doc.employeeProfile,
+		employeeProfile: doc.employeeProfile as unknown as EmployeeProfile | null,
 		clientMemberships: null,
 		identities: {
 			google: doc.identities.google as OAuthIdentity | null,
@@ -277,7 +286,8 @@ export async function updateUser(
 	}
 
 	if (employeeProfile !== undefined) {
-		setFields.employeeProfile = employeeProfile;
+		setFields.employeeProfile =
+			employeeProfile as unknown as EmployeeProfileDocument;
 	}
 
 	const result = await getUserCollection().findOneAndUpdate(

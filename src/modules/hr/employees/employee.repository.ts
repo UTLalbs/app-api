@@ -16,9 +16,10 @@ import type {
 	DocumentStatus,
 	EmergencyContact,
 	EmployeeDocument,
-	EmployeeProfile,
 	EmployeeQueryFilter,
 	RenewalFrom,
+	ChecklistItemDto,
+	EmployeeProfileDocument,
 } from "./employee.types";
 
 // ── Proyección base para employees ────────────────────────────────────────
@@ -114,10 +115,58 @@ export async function initEmployeeArrays(
 	}
 }
 
+async function populateWaivedBy(
+	userId: ObjectId | null,
+): Promise<{id: string; displayName: string} | null> {
+	if (!userId) return null;
+
+	const user = await getUserCollection().findOne(
+		{_id: userId},
+		{projection: {_id: 1, displayName: 1}},
+	);
+
+	if (!user) return null;
+
+	return {
+		id: user._id.toHexString(),
+		displayName: user.displayName,
+	};
+}
+
+async function toChecklistItemDto(
+	item: ChecklistItem,
+): Promise<ChecklistItemDto> {
+	return {
+		_id: item._id.toHexString(),
+		type: item.type,
+		label: item.label,
+		required: item.required,
+		status: item.status,
+		documentId: item.documentId?.toHexString() ?? null,
+		hasExpiry: item.hasExpiry,
+		alertDays: item.alertDays,
+		hasRenewal: item.hasRenewal,
+		renewalMonths: item.renewalMonths,
+		renewalFrom: item.renewalFrom,
+		lastRenewedAt: item.lastRenewedAt,
+		waivedBy: await populateWaivedBy(item.waivedBy),
+		waivedAt: item.waivedAt,
+		waivedReason: item.waivedReason,
+		waivedNote: item.waivedNote,
+	};
+}
+
 // ── Conversión ─────────────────────────────────────────────────────────────
 
-function toUser(doc: UserDocument): User {
+async function toUser(doc: UserDocument): Promise<User> {
 	const ep = doc.employeeProfile;
+
+	// Poblar waivedBy de cada checklist item
+	const checklist = await Promise.all(
+		(Array.isArray(ep?.checklist) ? ep.checklist : []).map((item) =>
+			toChecklistItemDto(item as ChecklistItem),
+		),
+	);
 
 	return {
 		id: doc._id.toHexString(),
@@ -143,7 +192,7 @@ function toUser(doc: UserDocument): User {
 						: [],
 					bankAccounts: Array.isArray(ep.bankAccounts) ? ep.bankAccounts : [],
 					documents: Array.isArray(ep.documents) ? ep.documents : [],
-					checklist: Array.isArray(ep.checklist) ? ep.checklist : [],
+					checklist,
 					auditLog: Array.isArray(ep.auditLog) ? ep.auditLog : [],
 					vehicleOperator: ep.vehicleOperator ?? null,
 					currentAddress: ep.currentAddress ?? {
@@ -220,7 +269,9 @@ export async function findAllEmployees(
 	]);
 
 	return {
-		employees: docs.map((doc) => toUser(doc as UserDocument)),
+		employees: await Promise.all(
+			docs.map((doc) => toUser(doc as UserDocument)),
+		),
 		total,
 	};
 }
@@ -241,7 +292,7 @@ export async function findEmployeeById(
 		{projection: EMPLOYEE_PROJECTION},
 	);
 
-	return doc ? toUser(doc as UserDocument) : null;
+	return doc ? await toUser(doc as UserDocument) : null;
 }
 
 // ── Update profile ─────────────────────────────────────────────────────────
@@ -249,7 +300,7 @@ export async function findEmployeeById(
 export async function updateEmployeeProfile(
 	id: string,
 	orgId: string,
-	fields: Partial<EmployeeProfile>,
+	fields: Partial<EmployeeProfileDocument>,
 	auditEntries: AuditLogEntry[],
 ): Promise<User | null> {
 	if (!ObjectId.isValid(id)) return null;
@@ -283,7 +334,7 @@ export async function updateEmployeeProfile(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	return result ? toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 
 // ── Emergency Contacts ─────────────────────────────────────────────────────
@@ -306,7 +357,7 @@ export async function addEmergencyContact(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	return result ? toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 
 export async function updateEmergencyContact(
@@ -334,7 +385,7 @@ export async function updateEmergencyContact(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	return result ? toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 
 export async function removeEmergencyContact(
@@ -456,7 +507,7 @@ export async function updateBankAccount(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	return result ? toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 
 export async function removeBankAccount(
@@ -584,7 +635,7 @@ export async function updateEmployeeDocument(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	return result ? toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 export async function removeEmployeeDocument(
 	id: string,
@@ -656,7 +707,7 @@ export async function addChecklistItems(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	return result ? toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 
 export async function updateChecklistItem(
@@ -699,7 +750,7 @@ export async function updateChecklistItem(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	return result ? toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 export async function removeChecklistItem(
 	id: string,

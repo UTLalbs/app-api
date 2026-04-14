@@ -79,6 +79,8 @@ export type DocumentType =
 	| "technical_certification"
 	| "other";
 
+
+
 // ── Subdocumentos — Emergency Contact ─────────────────────────────────────
 
 export interface EmergencyContact {
@@ -267,6 +269,26 @@ export interface ChecklistItem {
 	waivedNote: string | null;
 }
 
+// ── Tipo de dominio (response al frontend) ─────────────────────────────────
+export interface ChecklistItemDto {
+  _id:          string;
+  type:         string;
+  label:        string;
+  required:     boolean;
+  status:       ChecklistStatus;
+  documentId:   string | null;
+  hasExpiry:    boolean;
+  alertDays:    number | null;
+  hasRenewal:   boolean;
+  renewalMonths: number | null;
+  renewalFrom:  RenewalFrom;
+  lastRenewedAt: Date | null;
+  waivedBy:     PopulatedUser | null;   // ← poblado
+  waivedAt:     Date | null;
+  waivedReason: WaivedReason | null;
+  waivedNote:   string | null;
+}
+
 // ── Subdocumentos — Audit Log ──────────────────────────────────────────────
 
 export interface AuditLogEntry {
@@ -282,42 +304,46 @@ export interface AuditLogEntry {
 // ── Populated types ────────────────────────────────────────────────────────
 
 export interface PopulatedUser {
-	id: string;
-	displayName: string;
+  id:          string;
+  displayName: string;
 }
 
-export interface ChecklistItemPopulated extends Omit<
-	ChecklistItem,
-	"waivedBy"
-> {
-	waivedBy: PopulatedUser | null;
+export interface ChecklistItemPopulated
+  extends Omit<ChecklistItem, 'waivedBy' | '_id' | 'documentId'> {
+  _id:        string;
+  documentId: string | null;
+  waivedBy:   PopulatedUser | null;
 }
-
 // ── Employee Profile completo ──────────────────────────────────────────────
 
-export interface EmployeeProfile {
-	isEmployee: boolean;
-	employeeType: EmployeeType | null;
-	position: EmployeePosition | null;
-	department: EmployeeDepartment | null;
-	managerId: ObjectId | null;
-	profileId: ObjectId | null;
-	dateOfHire: Date | null;
-	employmentStatus: EmploymentStatus;
-	curp: string | null;
-	rfc: string | null;
-	rfcValidatedAt: Date | null;
-	rfcValidatedStatus: "valid" | "invalid" | null;
-	razonSocial: string | null;
-	regimenFiscal: {code: string; name: string} | null;
-	address: EmployeeAddress | null;
-	currentAddress: CurrentAddress;
-	emergencyContacts: EmergencyContact[];
-	bankAccounts: BankAccount[];
-	vehicleOperator: VehicleOperator | null;
-	documents: EmployeeDocument[];
-	checklist: ChecklistItem[];
-	auditLog: AuditLogEntry[];
+export interface EmployeeProfileDocument {
+  isEmployee:        boolean;
+  employeeType:      EmployeeType | null;
+  position:          EmployeePosition | null;
+  department:        EmployeeDepartment | null;
+  managerId:         ObjectId | null;
+  profileId:         ObjectId | null;
+  dateOfHire:        Date | null;
+  employmentStatus:  EmploymentStatus;
+  curp:              string | null;
+  rfc:               string | null;
+  rfcValidatedAt:    Date | null;
+  rfcValidatedStatus: 'valid' | 'invalid' | null;
+  razonSocial:       string | null;
+  regimenFiscal:     { code: string; name: string } | null;
+  address:           EmployeeAddress | null;
+  currentAddress:    CurrentAddress;
+  emergencyContacts: EmergencyContact[];
+  bankAccounts:      BankAccount[];
+  vehicleOperator:   VehicleOperator | null;
+  documents:         EmployeeDocument[];
+  checklist:         ChecklistItem[];       // ← ObjectId
+  auditLog:          AuditLogEntry[];
+}
+
+// ── Domain — para response al frontend ────────────────────────────────────
+export interface EmployeeProfile extends Omit<EmployeeProfileDocument, 'checklist'> {
+  checklist: ChecklistItemDto[];             // ← strings + populated
 }
 
 // ── Address ────────────────────────────────────────────────────────────────
