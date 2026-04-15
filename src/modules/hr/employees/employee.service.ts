@@ -71,7 +71,9 @@ export async function editEmployeeProfile(
 	_actorId: string,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+	if ( !existing ) throw new NotFoundError( "Employee" );
+	
+	  logger.info({ fields }, 'editEmployeeProfile fields');
 
 	// Inicializar arrays faltantes
 	await initEmployeeArrays(id, orgId);

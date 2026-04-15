@@ -22,6 +22,8 @@ import type {
 	EmploymentStatus,
 } from "./employee.types";
 
+import { logger } from "../../../config/logger";
+
 // ── Proyección base para employees ────────────────────────────────────────
 
 const EMPLOYEE_PROJECTION = {
@@ -314,7 +316,6 @@ export async function updateEmployeeProfile(
 		{
 			_id: new ObjectId(id),
 			orgId: new ObjectId(orgId),
-			deletedAt: null,
 			"employeeProfile.isEmployee": true,
 		},
 		{$set: setFields},
@@ -349,6 +350,9 @@ export async function updateEmploymentStatus(
 		updatedAt: now,
 	};
 
+	// LOG TEMPORAL
+	logger.info({ id, orgId, status, userStatus: userStatusMap[status] }, 'updateEmploymentStatus fields');
+
 	const result = await getUserCollection().findOneAndUpdate(
 		{
 			_id: new ObjectId(id),
@@ -357,6 +361,10 @@ export async function updateEmploymentStatus(
 		{$set: setFields},
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
+
+	  // LOG TEMPORAL
+
+	logger.info({ result }, 'updateEmploymentStatus result');
 
 	return result ? await toUser(result as UserDocument) : null;
 }
