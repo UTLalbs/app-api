@@ -65,47 +65,57 @@ export async function getEmployee(id: string, orgId: string): Promise<User> {
 // ── Actualizar perfil ──────────────────────────────────────────────────────
 
 export async function editEmployeeProfile(
-	id: string,
-	orgId: string,
-	fields: Partial<EmployeeProfileDocument>,
-	_actorId: string,
+  id:       string,
+  orgId:    string,
+  fields:   Partial<EmployeeProfileDocument>,
+  _actorId: string,
 ): Promise<User> {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
+  const existing = await findEmployeeById(id, orgId);
+  if (!existing) throw new NotFoundError('Employee');
 
-	// Inicializar arrays faltantes — delegar al helper
-	await initEmployeeArrays(id, orgId);
+  // Inicializar arrays faltantes
+  await initEmployeeArrays(id, orgId);
 
-	const updated = await updateEmployeeProfile(id, orgId, fields);
-	if (!updated) throw new NotFoundError("Employee");
+  // Si viene employmentStatus → sincronizar User.status y deletedAt
+  if (fields.employmentStatus) {
+    await updateEmploymentStatus(id, orgId, fields.employmentStatus);
+    // Remover employmentStatus de fields para no duplicar el $set
+    const { employmentStatus, ...rest } = fields;
+    fields = rest;
+  }
 
-	// Si isEmployee acaba de activarse → generar checklist automáticamente
-	const wasEmployee = existing.employeeProfile?.isEmployee ?? false;
-	const isNowEmployee = fields.isEmployee === true;
-	const checklistEmpty =
-		(updated.employeeProfile?.checklist?.length ?? 0) === 0;
+  // Si quedan más campos que actualizar
+  if (Object.keys(fields).length > 0) {
+    const updated = await updateEmployeeProfile(id, orgId, fields);
+    if (!updated) throw new NotFoundError('Employee');
 
-	if ((!wasEmployee && isNowEmployee) || (isNowEmployee && checklistEmpty)) {
-		const newItems = buildChecklist();
+    // Si isEmployee acaba de activarse → generar checklist automáticamente
+    const wasEmployee    = existing.employeeProfile?.isEmployee ?? false;
+    const isNowEmployee  = fields.isEmployee === true;
+    const checklistEmpty = (updated.employeeProfile?.checklist?.length ?? 0) === 0;
 
-		if (newItems.length > 0) {
-			await addChecklistItems(id, orgId, newItems);
-			logger.info(
-				{employeeId: id, itemsAdded: newItems.length},
-				"Checklist auto-generated on isEmployee activation",
-			);
-		}
-	}
+    if ((!wasEmployee && isNowEmployee) || (isNowEmployee && checklistEmpty)) {
+      const newItems = buildChecklist();
 
-	const final = await findEmployeeById(id, orgId);
-	if (!final) throw new NotFoundError("Employee");
+      if (newItems.length > 0) {
+        await addChecklistItems(id, orgId, newItems);
+        logger.info(
+          { employeeId: id, itemsAdded: newItems.length },
+          'Checklist auto-generated on isEmployee activation',
+        );
+      }
+    }
+  }
 
-	logger.info(
-		{employeeId: id, changedFields: Object.keys(fields).length},
-		"Employee profile updated",
-	);
+  const final = await findEmployeeById(id, orgId);
+  if (!final) throw new NotFoundError('Employee');
 
-	return final;
+  logger.info(
+    { employeeId: id, changedFields: Object.keys(fields).length },
+    'Employee profile updated',
+  );
+
+  return final;
 }
 
 // ── Cambiar estatus de empleo ─────────────────────────────────────────────
