@@ -24,7 +24,8 @@ import
   generateEmployeeChecklist,
   createChecklistItem,
   updateChecklistItem,
-  deleteChecklistItemHandler,
+    deleteChecklistItemHandler,
+  updateEmploymentStatus
 } from './employee.controller';
 import {
   listEmployeesSchema,
@@ -42,6 +43,7 @@ import {
   createChecklistItemSchema,
   updateChecklistItemSchema,
   itemIdParamSchema,
+  updateEmploymentStatusSchema,
 } from './employee.validator';
 
 // ── Multer — memory storage ────────────────────────────────────────────────
@@ -80,6 +82,8 @@ employeeRouter.patch(
   updateProfile,
 );
 
+
+
 // ── Emergency Contacts ─────────────────────────────────────────────────────
 
 employeeRouter.post(
@@ -101,6 +105,15 @@ employeeRouter.delete(
   validate(contactIdParamSchema),
   authorize('empoyees', 'update'),
   deleteEmergencyContact,
+);
+
+// ── Employment Status ─────────────────────────────────────────────────────
+
+employeeRouter.patch(
+  '/:id/employment-status',
+  validate(updateEmploymentStatusSchema),
+  authorize('employees', 'update'),
+  updateEmploymentStatus,
 );
 
 // ── Bank Accounts ──────────────────────────────────────────────────────────

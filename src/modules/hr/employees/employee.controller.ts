@@ -21,6 +21,7 @@ import {
 	editChecklistItem,
 	deleteChecklistItem,
 	computeChecklistMeta,
+	changeEmploymentStatus,
 } from "./employee.service";
 import type {
 	EmployeeDepartment,
@@ -29,6 +30,7 @@ import type {
 	EmployeeType,
 	RenewalFrom,
 	WaivedReason,
+	EmploymentStatus,
 } from "./employee.types";
 import type {
 	CreateBankAccountInput,
@@ -61,13 +63,27 @@ export const getEmployees = asyncHandler(
 				| "off_duty"
 				| undefined,
 			employmentStatus: req.query.employmentStatus as
-				| "active"
-				| "leave"
-				| "terminated"
+				| EmploymentStatus
 				| undefined,
+			includeTerminated: req.query.includeTerminated === "true",
 		});
 
 		res.json({success: true, data: employees, meta: {total}});
+	},
+);
+
+// Nuevo handler para cambiar employmentStatus
+export const updateEmploymentStatus = asyncHandler(
+	async (req: Request, res: Response) => {
+		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
+
+		const updated = await changeEmploymentStatus(
+			String(req.params.id),
+			orgId,
+			req.body.employmentStatus as EmploymentStatus,
+		);
+
+		res.json({success: true, data: updated});
 	},
 );
 
@@ -89,7 +105,7 @@ export const updateProfile = asyncHandler(
 		const updated = await editEmployeeProfile(
 			String(req.params.id),
 			orgId,
-			 req.body as unknown as Partial<EmployeeProfileDocument>,  // ← cast
+			req.body as unknown as Partial<EmployeeProfileDocument>, // ← cast
 			req.user!.id,
 		);
 		res.json({success: true, data: updated.employeeProfile});
@@ -286,21 +302,21 @@ export const getChecklist = asyncHandler(
 );
 
 export const generateEmployeeChecklist = asyncHandler(
-  async (req: Request & GenerateChecklistInput, res: Response) => {
-    const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? '';
+	async (req: Request & GenerateChecklistInput, res: Response) => {
+		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
 
-    const updated = await generateChecklist(
-      String(req.params.id),
-      orgId,
-      req.user!.id,
-      req.body.profileId ?? null, 
-    );
+		const updated = await generateChecklist(
+			String(req.params.id),
+			orgId,
+			req.user!.id,
+			req.body.profileId ?? null,
+		);
 
-    const checklist = updated.employeeProfile?.checklist ?? [];
-    const meta      = computeChecklistMeta(checklist);
+		const checklist = updated.employeeProfile?.checklist ?? [];
+		const meta = computeChecklistMeta(checklist);
 
-    res.json({ success: true, data: checklist, meta });
-  },
+		res.json({success: true, data: checklist, meta});
+	},
 );
 
 export const createChecklistItem = asyncHandler(
@@ -355,4 +371,3 @@ export const deleteChecklistItemHandler = asyncHandler(
 		res.status(204).send();
 	},
 );
-

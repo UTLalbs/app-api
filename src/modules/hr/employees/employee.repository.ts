@@ -19,6 +19,7 @@ import type {
 	RenewalFrom,
 	ChecklistItemDto,
 	EmployeeProfileDocument,
+	EmploymentStatus,
 } from "./employee.types";
 
 // ── Proyección base para employees ────────────────────────────────────────
@@ -231,6 +232,11 @@ export async function findAllEmployees(
 		"employeeProfile.isEmployee": true,
 	};
 
+	// Por default excluir terminados (deletedAt != null)
+	if (!filter.includeTerminated) {
+		query.deletedAt = null;
+	}
+
 	if (filter.department)
 		query["employeeProfile.department"] = filter.department;
 	if (filter.employeeType)
@@ -310,6 +316,55 @@ export async function updateEmployeeProfile(
 			_id: new ObjectId(id),
 			orgId: new ObjectId(orgId),
 			deletedAt: null,
+			"employeeProfile.isEmployee": true,
+		},
+		{$set: setFields},
+		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
+	);
+
+	return result ? await toUser(result as UserDocument) : null;
+}
+
+// ── Update employment status ─────────────────────────────────────────────
+export async function updateEmploymentStatus(
+	id: string,
+	orgId: string,
+	status: EmploymentStatus,
+): Promise<User | null> {
+	if (!ObjectId.isValid(id)) return null;
+
+	const now = new Date();
+
+	// Mapear employmentStatus → userStatus
+	const userStatusMap: Record<EmploymentStatus, "active" | "inactive"> = {
+		active: "active",
+		leave: "inactive",
+		vacation: "inactive",
+		disability: "inactive",
+		suspended: "inactive",
+		terminated: "inactive",
+	};
+
+	const userStatus = userStatusMap[status];
+
+	const setFields: Record<string, unknown> = {
+		status: userStatus,
+		"employeeProfile.employmentStatus": status,
+		updatedAt: now,
+	};
+
+	// Si es terminated → soft delete
+	if (status === "terminated") {
+		setFields.deletedAt = now;
+	} else {
+		// Si se reactiva → quitar deletedAt
+		setFields.deletedAt = null;
+	}
+
+	const result = await getUserCollection().findOneAndUpdate(
+		{
+			_id: new ObjectId(id),
+			orgId: new ObjectId(orgId),
 			"employeeProfile.isEmployee": true,
 		},
 		{$set: setFields},

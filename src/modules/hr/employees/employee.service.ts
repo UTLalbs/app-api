@@ -30,8 +30,8 @@ import {
 	addChecklistItems,
 	updateChecklistItem,
 	removeChecklistItem,
-
 	initEmployeeArrays,
+	updateEmploymentStatus,
 } from "./employee.repository";
 import type {
 	ChecklistStatus,
@@ -40,6 +40,7 @@ import type {
 	EmergencyContact,
 	EmployeeProfileDocument,
 	EmployeeQueryFilter,
+	EmploymentStatus,
 	RenewalFrom,
 	WaivedReason,
 } from "./employee.types";
@@ -105,6 +106,23 @@ export async function editEmployeeProfile(
 	);
 
 	return final;
+}
+
+// ── Cambiar estatus de empleo ─────────────────────────────────────────────
+export async function changeEmploymentStatus(
+	id: string,
+	orgId: string,
+	status: EmploymentStatus,
+): Promise<User> {
+	const existing = await findEmployeeById(id, orgId);
+	if (!existing) throw new NotFoundError("Employee");
+
+	const updated = await updateEmploymentStatus(id, orgId, status);
+	if (!updated) throw new NotFoundError("Employee");
+
+	logger.info({employeeId: id, status}, "Employment status changed");
+
+	return updated;
 }
 
 // ── Emergency Contacts ─────────────────────────────────────────────────────
@@ -238,11 +256,7 @@ export async function uploadDocument(
 
 	if (!doc) throw new NotFoundError("Employee");
 
-
-	logger.info(
-		{employeeId: id, type: meta.type, key},
-		"Document uploaded",
-	);
+	logger.info({employeeId: id, type: meta.type, key}, "Document uploaded");
 
 	return doc;
 }
@@ -298,32 +312,20 @@ export async function editDocument(
 			if (checklistItem) {
 				if (fields.status === "verified") {
 					// Documento verificado → checklist a complete + religar documentId
-					await updateChecklistItem(
-						id,
-						orgId,
-						String(checklistItem._id),
-						{
-							status: "complete",
-							documentId: new ObjectId(docId),
-						},
-					);
+					await updateChecklistItem(id, orgId, String(checklistItem._id), {
+						status: "complete",
+						documentId: new ObjectId(docId),
+					});
 				} else {
 					// Documento rechazado → checklist a pending + desligar documento
-					await updateChecklistItem(
-						id,
-						orgId,
-						String(checklistItem._id),
-						{
-							status: "pending",
-							documentId: null,
-						},
-					);
+					await updateChecklistItem(id, orgId, String(checklistItem._id), {
+						status: "pending",
+						documentId: null,
+					});
 				}
 			}
 		}
 	}
-
-	
 
 	return updated;
 }
@@ -345,7 +347,6 @@ export async function deleteDocument(
 
 	const result = await removeEmployeeDocument(id, orgId, docId);
 	if (!result) throw new NotFoundError("Document");
-
 
 	// Eliminar de S3 — fire and forget
 	const key = extractKeyFromUrl(result.fileUrl);
@@ -493,7 +494,6 @@ export async function addCustomChecklistItem(
 	]);
 
 	if (!updated) throw new NotFoundError("Employee");
-
 
 	return updated;
 }

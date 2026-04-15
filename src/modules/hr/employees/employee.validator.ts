@@ -25,7 +25,14 @@ const departmentSchema = z.enum([
 	"human_resources",
 ]);
 
-const employmentStatusSchema = z.enum(["active", "leave", "terminated"]);
+const employmentStatusSchema = z.enum([
+  'active',
+  'leave',
+  'vacation',
+  'disability',
+  'suspended',
+  'terminated',
+]);
 const driverStatusSchema = z.enum(["available", "on_trip", "off_duty"]);
 const documentStatusSchema = z.enum([
 	"pending",
@@ -243,19 +250,31 @@ export const updateEmployeeProfileSchema = z.object({
 		currentAddress: currentAddressSchema.optional(),
 		vehicleOperator: vehicleOperatorSchema.nullable().optional(),
 	}),
+} );
+
+// ── Update employment status ───────────────────────────────────────────────
+export const updateEmploymentStatusSchema = z.object({
+  params: z.object({ id: z.string().length(24) }),
+  body: z.object({
+    employmentStatus: z.enum([
+      'active', 'leave', 'vacation',
+      'disability', 'suspended', 'terminated',
+    ]),
+  }),
 });
 
 // ── List employees ─────────────────────────────────────────────────────────
 
 export const listEmployeesSchema = z.object({
-	query: z.object({
-		search: z.string().optional(),
-		department: departmentSchema.optional(),
-		employeeType: employeeTypeSchema.optional(),
-		position: positionSchema.optional(),
-		driverStatus: driverStatusSchema.optional(),
-		employmentStatus: employmentStatusSchema.optional(),
-	}),
+  query: z.object({
+    search:              z.string().optional(),
+    department:          departmentSchema.optional(),
+    employeeType:        employeeTypeSchema.optional(),
+    position:            positionSchema.optional(),
+    driverStatus:        driverStatusSchema.optional(),
+    employmentStatus:    employmentStatusSchema.optional(),
+    includeTerminated:   z.enum(['true', 'false']).optional(),
+  }),
 });
 
 // ── Employee ID param ──────────────────────────────────────────────────────
