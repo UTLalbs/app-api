@@ -65,7 +65,7 @@ export const getEmployees = asyncHandler(
 			employmentStatus: req.query.employmentStatus as
 				| EmploymentStatus
 				| undefined,
-			excludeTerminated: req.query.excludeTerminated !== "false", // Por defecto excluye terminados
+			excludeTerminated: req.query.excludeTerminated === 'false' ? false : true,
 		});
 
 		res.json({success: true, data: employees, meta: {total}});

@@ -231,14 +231,14 @@ export async function findAllEmployees(
 		"employeeProfile.isEmployee": true,
 	};
 
-	if (filter.employmentStatus) {
-		// Filtro explícito — mostrar solo ese status
-		query["employeeProfile.employmentStatus"] = filter.employmentStatus;
-	} else if (filter.excludeTerminated !== false) {
-		// Default → excluir terminated
-		query["employeeProfile.employmentStatus"] = {$ne: "terminated"};
-	}
-	// Si excludeTerminated = false → sin filtro → incluir todos
+if (filter.employmentStatus) {
+    // Filtro explícito — mostrar solo ese status
+    query['employeeProfile.employmentStatus'] = filter.employmentStatus;
+  } else if (filter.excludeTerminated === true || filter.excludeTerminated === undefined) {
+    // Default → excluir terminated
+    query['employeeProfile.employmentStatus'] = { $ne: 'terminated' };
+  }
+  // Si excludeTerminated === false → sin filtro → incluir todos
 
 	if (filter.department)
 		query["employeeProfile.department"] = filter.department;
@@ -353,7 +353,6 @@ export async function updateEmploymentStatus(
 		{
 			_id: new ObjectId(id),
 			orgId: new ObjectId(orgId),
-			"employeeProfile.isEmployee": true,
 		},
 		{$set: setFields},
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
