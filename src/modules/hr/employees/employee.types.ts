@@ -371,5 +371,5 @@ export interface EmployeeQueryFilter {
 	position?: EmployeePosition;
 	driverStatus?: DriverStatus;
 	employmentStatus?: EmploymentStatus;
-	includeTerminated?:  boolean;
+	excludeTerminated?: boolean;
 }

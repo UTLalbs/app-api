@@ -223,60 +223,58 @@ async function toUser(doc: UserDocument): Promise<User> {
 // ── Queries ────────────────────────────────────────────────────────────────
 
 export async function findAllEmployees(
-  orgId:  string,
-  filter: EmployeeQueryFilter,
-): Promise<{ employees: User[]; total: number }> {
-  const query: Record<string, unknown> = {
-    orgId:                        new ObjectId(orgId),
-    'employeeProfile.isEmployee': true,
-  };
+	orgId: string,
+	filter: EmployeeQueryFilter,
+): Promise<{employees: User[]; total: number}> {
+	const query: Record<string, unknown> = {
+		orgId: new ObjectId(orgId),
+		"employeeProfile.isEmployee": true,
+	};
 
-  // Por default excluir terminated
-  if (filter.includeTerminated) {
-    // incluir todos — sin filtro de employmentStatus
-  } else if (filter.employmentStatus === 'terminated') {
-    // ver solo bajas
-    query['employeeProfile.employmentStatus'] = 'terminated';
-  } else {
-    // default — excluir terminated
-    query['employeeProfile.employmentStatus'] = { $ne: 'terminated' };
-  }
+	if (filter.employmentStatus) {
+		// Filtro explícito — mostrar solo ese status
+		query["employeeProfile.employmentStatus"] = filter.employmentStatus;
+	} else if (filter.excludeTerminated !== false) {
+		// Default → excluir terminated
+		query["employeeProfile.employmentStatus"] = {$ne: "terminated"};
+	}
+	// Si excludeTerminated = false → sin filtro → incluir todos
 
-  // Aplicar filtro de employmentStatus solo si no es terminated
-  if (filter.employmentStatus && filter.employmentStatus !== 'terminated') {
-    query['employeeProfile.employmentStatus'] = filter.employmentStatus;
-  }
+	if (filter.department)
+		query["employeeProfile.department"] = filter.department;
+	if (filter.employeeType)
+		query["employeeProfile.employeeType"] = filter.employeeType;
+	if (filter.position) query["employeeProfile.position"] = filter.position;
+	if (filter.driverStatus) {
+		query["employeeProfile.vehicleOperator.driverStatus"] = filter.driverStatus;
+	}
 
-  if (filter.department)   query['employeeProfile.department']   = filter.department;
-  if (filter.employeeType) query['employeeProfile.employeeType'] = filter.employeeType;
-  if (filter.position)     query['employeeProfile.position']     = filter.position;
-  if (filter.driverStatus) {
-    query['employeeProfile.vehicleOperator.driverStatus'] = filter.driverStatus;
-  }
+	if (filter.search) {
+		const regex = {$regex: filter.search, $options: "i"};
+		query.$or = [
+			{displayName: regex},
+			{firstName: regex},
+			{lastName: regex},
+			{email: regex},
+		];
+	}
 
-  if (filter.search) {
-    const regex = { $regex: filter.search, $options: 'i' };
-    query.$or = [
-      { displayName: regex },
-      { firstName:   regex },
-      { lastName:    regex },
-      { email:       regex },
-    ];
-  }
+	const [docs, total] = await Promise.all([
+		getUserCollection()
+			.find(query, {projection: EMPLOYEE_PROJECTION})
+			.sort({"employeeProfile.employmentStatus": 1, createdAt: -1})
+			.toArray(),
+		getUserCollection().countDocuments(query),
+	]);
 
-  const [docs, total] = await Promise.all([
-    getUserCollection()
-      .find(query, { projection: EMPLOYEE_PROJECTION })
-      .sort({ 'employeeProfile.employmentStatus': 1, createdAt: -1 })
-      .toArray(),
-    getUserCollection().countDocuments(query),
-  ]);
-
-  return {
-    employees: await Promise.all(docs.map((doc) => toUser(doc as UserDocument))),
-    total,
-  };
+	return {
+		employees: await Promise.all(
+			docs.map((doc) => toUser(doc as UserDocument)),
+		),
+		total,
+	};
 }
+
 export async function findEmployeeById(
 	id: string,
 	orgId: string,
@@ -287,7 +285,6 @@ export async function findEmployeeById(
 		{
 			_id: new ObjectId(id),
 			orgId: new ObjectId(orgId),
-			deletedAt: null,
 			"employeeProfile.isEmployee": true,
 		},
 		{projection: EMPLOYEE_PROJECTION},
@@ -329,42 +326,40 @@ export async function updateEmployeeProfile(
 
 // ── Update employment status ─────────────────────────────────────────────
 export async function updateEmploymentStatus(
-  id:     string,
-  orgId:  string,
-  status: EmploymentStatus,
+	id: string,
+	orgId: string,
+	status: EmploymentStatus,
 ): Promise<User | null> {
-  if (!ObjectId.isValid(id)) return null;
+	if (!ObjectId.isValid(id)) return null;
 
-  const now = new Date();
+	const now = new Date();
 
-  const userStatusMap: Record<EmploymentStatus, 'active' | 'inactive'> = {
-    active:     'active',
-    leave:      'inactive',
-    vacation:   'inactive',
-    disability: 'inactive',
-    suspended:  'inactive',
-    terminated: 'inactive',
-  };
+	const userStatusMap: Record<EmploymentStatus, "active" | "inactive"> = {
+		active: "active",
+		leave: "inactive",
+		vacation: "inactive",
+		disability: "inactive",
+		suspended: "inactive",
+		terminated: "inactive",
+	};
 
-  const setFields: Record<string, unknown> = {
-    status:                             userStatusMap[status],
-    'employeeProfile.employmentStatus': status,
-    updatedAt:                          now,
-    // terminated → soft delete, cualquier otro → quitar deletedAt
-    deletedAt: status === 'terminated' ? now : null,
-  };
+	const setFields: Record<string, unknown> = {
+		status: userStatusMap[status],
+		"employeeProfile.employmentStatus": status,
+		updatedAt: now,
+	};
 
-  const result = await getUserCollection().findOneAndUpdate(
-    {
-      _id:   new ObjectId(id),
-      orgId: new ObjectId(orgId),
-      'employeeProfile.isEmployee': true,
-    },
-    { $set: setFields },
-    { returnDocument: 'after', projection: EMPLOYEE_PROJECTION },
-  );
+	const result = await getUserCollection().findOneAndUpdate(
+		{
+			_id: new ObjectId(id),
+			orgId: new ObjectId(orgId),
+			"employeeProfile.isEmployee": true,
+		},
+		{$set: setFields},
+		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
+	);
 
-  return result ? await toUser(result as UserDocument) : null;
+	return result ? await toUser(result as UserDocument) : null;
 }
 
 // ── Emergency Contacts ─────────────────────────────────────────────────────

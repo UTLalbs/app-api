@@ -273,7 +273,7 @@ export const listEmployeesSchema = z.object({
     position:            positionSchema.optional(),
     driverStatus:        driverStatusSchema.optional(),
     employmentStatus:    employmentStatusSchema.optional(),
-    includeTerminated:   z.enum(['true', 'false']).optional(),
+    excludeTerminated:   z.enum(['true', 'false']).optional(),
   }),
 });
 
