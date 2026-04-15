@@ -10,6 +10,7 @@ import { findUserById } from '../users/user.repository';
 import {
   issueAccessToken,
   accessTokenCookieOptions,
+  impersonateTokenCookieOptions
 } from './token.service';
 
 
@@ -49,7 +50,7 @@ export const startImpersonation = asyncHandler(
     });
 
     // Solo actualizamos el access_token — refresh_token queda igual
-    res.cookie('access_token', accessToken, accessTokenCookieOptions);
+    res.cookie('access_token', accessToken, impersonateTokenCookieOptions);
 
     await createAuditEvent({
       category: 'auth',

@@ -40,7 +40,7 @@ import type {
 	DocumentStatus,
 	DocumentType,
 	EmergencyContact,
-	EmployeeProfile,
+	EmployeeProfileDocument,
 	EmployeeQueryFilter,
 	RenewalFrom,
 	WaivedReason,
@@ -68,7 +68,7 @@ export async function getEmployee(id: string, orgId: string): Promise<User> {
 export async function editEmployeeProfile(
 	id: string,
 	orgId: string,
-	fields: Partial<EmployeeProfile>,
+	fields: Partial<EmployeeProfileDocument>,
 	actorId: string,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);

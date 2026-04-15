@@ -1,4 +1,7 @@
 import type {Request, Response} from "express";
+import jwt from "jsonwebtoken";
+
+
 
 import {logger} from "../../config/logger";
 import {getRedisClient} from "../../config/redis";
@@ -11,6 +14,7 @@ import {
 	logout,
 	logoutAllDevices,
 } from "./auth.service";
+import type {AccessTokenPayload} from "./auth.types";
 import {
 	getGoogleAuthorizationUrl,
 	handleGoogleCallback,
@@ -25,6 +29,7 @@ import {
 	verifyRefreshToken,
 	accessTokenCookieOptions,
 	refreshTokenCookieOptions,
+	impersonateTokenCookieOptions
 } from "./token.service";
 
 // TTL para state y codeVerifier en Redis (10 minutos)
@@ -188,16 +193,37 @@ export const microsoftCallback = asyncHandler(
 );
 
 // ── Refresh ────────────────────────────────────────────────────────────────
-
 export const refresh = asyncHandler(async (req: Request, res: Response) => {
 	const refreshToken = req.cookies?.refresh_token as string | undefined;
 
 	if (!refreshToken) throw new AuthError("No refresh token provided");
 
-	const tokens = await refreshSession(refreshToken);
+	// Leer impersonación del access token actual (aunque esté expirado)
+	let currentImpersonating: {orgId: string; orgName: string} | null = null;
+
+	try {
+		const currentToken =
+			req.cookies?.access_token ??
+			req.headers.authorization?.replace("Bearer ", "");
+
+		if (currentToken) {
+			const decoded = jwt.decode(currentToken) as AccessTokenPayload | null;
+			currentImpersonating = decoded?.impersonating ?? null;
+		}
+	} catch {
+		// Si no se puede decodificar — sin impersonación
+	}
+
+	const tokens = await refreshSession(refreshToken, currentImpersonating);
 
 	res
-		.cookie("access_token", tokens.accessToken, accessTokenCookieOptions)
+		.cookie(
+			"access_token",
+			tokens.accessToken,
+			currentImpersonating
+				? impersonateTokenCookieOptions // ← 8h si impersonando
+				: accessTokenCookieOptions, // ← 15m si normal
+		)
 		.cookie("refresh_token", tokens.refreshToken, refreshTokenCookieOptions)
 		.json({success: true});
 });

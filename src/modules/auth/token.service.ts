@@ -17,6 +17,7 @@ import type {
 // Se verifica en cada request sin tocar la DB
 
 const ACCESS_TOKEN_TTL = "15m";
+const ACCESS_TOKEN_IMPERSONATE_TTL = "8h"; // ← agregar
 
 export function issueAccessToken(
 	user: User,
@@ -31,9 +32,12 @@ export function issueAccessToken(
 		impersonating: impersonating ?? null,
 	};
 
-	return jwt.sign(payload, env.JWT_SECRET, {
-		expiresIn: ACCESS_TOKEN_TTL,
-	});
+	// Si está impersonando → token dura 8 horas
+	const expiresIn = impersonating
+		? ACCESS_TOKEN_IMPERSONATE_TTL
+		: ACCESS_TOKEN_TTL;
+
+	return jwt.sign(payload, env.JWT_SECRET, {expiresIn});
 }
 
 export function verifyAccessToken(token: string): AccessTokenPayload {
@@ -116,6 +120,13 @@ export const accessTokenCookieOptions: CookieOptions = {
 	secure: env.NODE_ENV === "production",
 	sameSite: "lax",
 	maxAge: 15 * 60 * 1000, // 15 minutos
+};
+
+export const impersonateTokenCookieOptions: CookieOptions = {
+  httpOnly: true,
+  secure:   env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  maxAge:   8 * 60 * 60 * 1000,  // 8 horas
 };
 
 export const refreshTokenCookieOptions: CookieOptions = {

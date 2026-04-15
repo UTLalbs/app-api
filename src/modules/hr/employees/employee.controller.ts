@@ -26,6 +26,7 @@ import {
 import type {
 	EmployeeDepartment,
 	EmployeePosition,
+	EmployeeProfileDocument,
 	EmployeeType,
 	RenewalFrom,
 	WaivedReason,
@@ -90,7 +91,7 @@ export const updateProfile = asyncHandler(
 		const updated = await editEmployeeProfile(
 			String(req.params.id),
 			orgId,
-			req.body,
+			 req.body as unknown as Partial<EmployeeProfileDocument>,  // ← cast
 			req.user!.id,
 		);
 		res.json({success: true, data: updated.employeeProfile});

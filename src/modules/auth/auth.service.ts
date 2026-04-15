@@ -1,188 +1,213 @@
-import { logger } from '../../config/logger';
-import { AuthError, ForbiddenError } from '../../shared/errors/AppError';
-import { createAuditEvent } from '../audit/audit.service';
+import {logger} from "../../config/logger";
+import {AuthError, ForbiddenError} from "../../shared/errors/AppError";
+import {createAuditEvent} from "../audit/audit.service";
 import {
-  findUserByEmail,
-  findUserByIdentity,
-  createUser,
-  linkUserIdentity,
-  updateUserLastLogin,
-} from '../users/user.repository';
-import type { User } from '../users/user.types';
+	findUserByEmail,
+	findUserByIdentity,
+	createUser,
+	linkUserIdentity,
+	updateUserLastLogin,
+} from "../users/user.repository";
+import type {User} from "../users/user.types";
 
-import type { OIDCProfile, TokenPair } from './auth.types';
-import { issueTokenPair } from './token.service';
+import type {OIDCProfile, TokenPair} from "./auth.types";
+import {issueTokenPair} from "./token.service";
 
 export interface LoginResult {
-  user: User;
-  tokens: TokenPair;
-  isNewUser: boolean;
+	user: User;
+	tokens: TokenPair;
+	isNewUser: boolean;
 }
 
 // ── Flujo principal de login SSO ───────────────────────────────────────────
 
 export async function loginWithOIDC(
-  profile: OIDCProfile,
-  orgId?: string,
+	profile: OIDCProfile,
+	orgId?: string,
 ): Promise<LoginResult> {
-  // Regla 1: email debe estar verificado
-  if (!profile.emailVerified) {
-    throw new AuthError('Email not verified by identity provider');
-  }
+	// Regla 1: email debe estar verificado
+	if (!profile.emailVerified) {
+		throw new AuthError("Email not verified by identity provider");
+	}
 
-  const providerField = profile.provider === 'google' ? 'google' : 'microsoft';
+	const providerField = profile.provider === "google" ? "google" : "microsoft";
 
-  // Regla 2: buscar por subjectId
-  let user = await findUserByIdentity(providerField, profile.subjectId);
-  let isNewUser = false;
+	// Regla 2: buscar por subjectId
+	let user = await findUserByIdentity(providerField, profile.subjectId);
+	let isNewUser = false;
 
-  if (!user) {
-    const existingUser = await findUserByEmail(profile.email);
+	if (!user) {
+		const existingUser = await findUserByEmail(profile.email);
 
-    if (existingUser) {
-      // Regla 3: identity linking
-      logger.info(
-        { userId: existingUser.id, provider: profile.provider },
-        'Linking new identity to existing user',
-      );
+		if (existingUser) {
+			// Regla 3: identity linking
+			logger.info(
+				{userId: existingUser.id, provider: profile.provider},
+				"Linking new identity to existing user",
+			);
 
-      user = await linkUserIdentity(
-        existingUser.id,
-        providerField,
-        profile.subjectId,
-        profile.email,
-      );
-    } else {
-      // Regla 4: usuario nuevo
-      // super_admin no necesita orgId
-      // usuarios normales sí lo requieren
-      if (!orgId) {
-        // Verificar si es el primer super_admin del sistema
-        // En producción esto se controla con un flag en .env
-        throw new AuthError(
-          'Organization not specified — please contact your administrator',
-        );
-      }
+			user = await linkUserIdentity(
+				existingUser.id,
+				providerField,
+				profile.subjectId,
+				profile.email,
+			);
+		} else {
+			// Regla 4: usuario nuevo
+			// super_admin no necesita orgId
+			// usuarios normales sí lo requieren
+			if (!orgId) {
+				// Verificar si es el primer super_admin del sistema
+				// En producción esto se controla con un flag en .env
+				throw new AuthError(
+					"Organization not specified — please contact your administrator",
+				);
+			}
 
-      logger.info(
-        { email: profile.email, provider: profile.provider },
-        'Creating new user from OIDC profile',
-      );
+			logger.info(
+				{email: profile.email, provider: profile.provider},
+				"Creating new user from OIDC profile",
+			);
 
-      user = await createUser({
-        email: profile.email,
-        displayName: profile.displayName,
-        orgId,
-        identities: {
-          local: null,
-          google: profile.provider === 'google'
-            ? { sub: profile.subjectId, email: profile.email, connectedAt: new Date() }
-            : null,
-          microsoft: profile.provider === 'microsoft'
-            ? { sub: profile.subjectId, email: profile.email, connectedAt: new Date() }
-            : null,
-        },
-      });
+			user = await createUser({
+				email: profile.email,
+				displayName: profile.displayName,
+				orgId,
+				identities: {
+					local: null,
+					google:
+						profile.provider === "google"
+							? {
+									sub: profile.subjectId,
+									email: profile.email,
+									connectedAt: new Date(),
+								}
+							: null,
+					microsoft:
+						profile.provider === "microsoft"
+							? {
+									sub: profile.subjectId,
+									email: profile.email,
+									connectedAt: new Date(),
+								}
+							: null,
+				},
+			});
 
-      isNewUser = true;
-    }
-  }
+			isNewUser = true;
+		}
+	}
 
-  // Regla 5: cuenta deshabilitada
-  if (user.status === 'inactive' || user.status === 'suspended') {
-    logger.warn({ userId: user.id }, 'Disabled user attempted login');
-    throw new ForbiddenError('Account is disabled');
-  }
+	// Regla 5: cuenta deshabilitada
+	if (user.status === "inactive" || user.status === "suspended") {
+		logger.warn({userId: user.id}, "Disabled user attempted login");
+		throw new ForbiddenError("Account is disabled");
+	}
 
-  // Regla 6: cuenta pendiente puede autenticarse
-  if (user.status === 'pending') {
-    logger.info({ userId: user.id }, 'Pending user logged in');
-  }
+	// Regla 6: cuenta pendiente puede autenticarse
+	if (user.status === "pending") {
+		logger.info({userId: user.id}, "Pending user logged in");
+	}
 
-  // Fire and forget
-  updateUserLastLogin(user.id).catch((err) =>
-    logger.error({ err, userId: user.id }, 'Failed to update lastLoginAt'),
-  );
+	// Fire and forget
+	updateUserLastLogin(user.id).catch((err) =>
+		logger.error({err, userId: user.id}, "Failed to update lastLoginAt"),
+	);
 
-  const tokens = await issueTokenPair(user);
+	const tokens = await issueTokenPair(user);
 
-  await createAuditEvent({
-    category: 'auth',
-    action: 'login_success',
-    actor: {
-      id: user.id,
-      email: user.email,
-      displayName: user.displayName,
-    },
-    orgId: user.orgId ?? undefined,
-    metadata: {
-      provider: profile.provider,
-      isNewUser,
-      userType: user.userType,
-    },
-  });
+	await createAuditEvent({
+		category: "auth",
+		action: "login_success",
+		actor: {
+			id: user.id,
+			email: user.email,
+			displayName: user.displayName,
+		},
+		orgId: user.orgId ?? undefined,
+		metadata: {
+			provider: profile.provider,
+			isNewUser,
+			userType: user.userType,
+		},
+	});
 
-  logger.info(
-    { userId: user.id, provider: profile.provider, isNewUser, userType: user.userType },
-    'User logged in successfully',
-  );
+	logger.info(
+		{
+			userId: user.id,
+			provider: profile.provider,
+			isNewUser,
+			userType: user.userType,
+		},
+		"User logged in successfully",
+	);
 
-  return { user, tokens, isNewUser };
+	return {user, tokens, isNewUser};
 }
 
 // ── Refresh session ────────────────────────────────────────────────────────
 
-export async function refreshSession(refreshToken: string): Promise<TokenPair> {
-  const { verifyRefreshToken, issueTokenPair: reissue, revokeRefreshToken } =
-    await import('./token.service');
-  const { findUserById } = await import('../users/user.repository');
+export async function refreshSession(
+	refreshToken: string,
+	currentImpersonating?: {orgId: string; orgName: string | null},
+): Promise<TokenPair> {
+	const {
+		verifyRefreshToken,
+		issueTokenPair: reissue,
+		revokeRefreshToken,
+	} = await import("./token.service");
+	const {findUserById} = await import("../users/user.repository");
 
-  const payload = await verifyRefreshToken(refreshToken);
+	const payload = await verifyRefreshToken(refreshToken);
 
-  await revokeRefreshToken(payload.sub, payload.jti);
+	await revokeRefreshToken(payload.sub, payload.jti);
 
-  const user = await findUserById(payload.sub, '');
+	const user = await findUserById(payload.sub, "");
 
-  if (!user) throw new AuthError('User not found');
+	if (!user) throw new AuthError("User not found");
 
-  if (user.status === 'inactive' || user.status === 'suspended') {
-    throw new ForbiddenError('Account is disabled');
-  }
+	if (user.status === "inactive" || user.status === "suspended") {
+		throw new ForbiddenError("Account is disabled");
+	}
 
-  const tokens = await reissue(user);
+	// Preservar contexto de impersonación si existe
+	const tokens = await reissue(user, currentImpersonating ?? null);
 
-  logger.info({ userId: user.id }, 'Session refreshed');
+	logger.info(
+		{userId: user.id, impersonating: !!currentImpersonating},
+		"Session refreshed",
+	);
 
-  return tokens;
+	return tokens;
 }
 
 // ── Logout ─────────────────────────────────────────────────────────────────
 
 export async function logout(userId: string, jti: string): Promise<void> {
-  const { revokeRefreshToken } = await import('./token.service');
+	const {revokeRefreshToken} = await import("./token.service");
 
-  await revokeRefreshToken(userId, jti);
+	await revokeRefreshToken(userId, jti);
 
-  await createAuditEvent({
-    category: 'auth',
-    action: 'logout',
-    actor: { id: userId, email: '', displayName: '' },
-    metadata: { jti },
-  });
+	await createAuditEvent({
+		category: "auth",
+		action: "logout",
+		actor: {id: userId, email: "", displayName: ""},
+		metadata: {jti},
+	});
 
-  logger.info({ userId }, 'User logged out');
+	logger.info({userId}, "User logged out");
 }
 
 export async function logoutAllDevices(userId: string): Promise<void> {
-  const { revokeAllUserTokens } = await import('./token.service');
+	const {revokeAllUserTokens} = await import("./token.service");
 
-  await revokeAllUserTokens(userId);
+	await revokeAllUserTokens(userId);
 
-  await createAuditEvent({
-    category: 'auth',
-    action: 'logout_all',
-    actor: { id: userId, email: '', displayName: '' },
-  });
+	await createAuditEvent({
+		category: "auth",
+		action: "logout_all",
+		actor: {id: userId, email: "", displayName: ""},
+	});
 
-  logger.info({ userId }, 'User logged out from all devices');
+	logger.info({userId}, "User logged out from all devices");
 }
