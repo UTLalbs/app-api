@@ -1,5 +1,6 @@
 import {ObjectId} from "mongodb";
 
+import {getRedisClient} from "../../../config/redis";
 import {getUserCollection} from "../../users/user.model";
 import type {User, UserDocument} from "../../users/user.types";
 
@@ -21,8 +22,6 @@ import type {
 	EmployeeProfileDocument,
 	EmploymentStatus,
 } from "./employee.types";
-
-import { logger } from "../../../config/logger";
 
 // ── Proyección base para employees ────────────────────────────────────────
 
@@ -233,14 +232,17 @@ export async function findAllEmployees(
 		"employeeProfile.isEmployee": true,
 	};
 
-if (filter.employmentStatus) {
-    // Filtro explícito — mostrar solo ese status
-    query['employeeProfile.employmentStatus'] = filter.employmentStatus;
-  } else if (filter.excludeTerminated === true || filter.excludeTerminated === undefined) {
-    // Default → excluir terminated
-    query['employeeProfile.employmentStatus'] = { $ne: 'terminated' };
-  }
-  // Si excludeTerminated === false → sin filtro → incluir todos
+	if (filter.employmentStatus) {
+		// Filtro explícito — mostrar solo ese status
+		query["employeeProfile.employmentStatus"] = filter.employmentStatus;
+	} else if (
+		filter.excludeTerminated === true ||
+		filter.excludeTerminated === undefined
+	) {
+		// Default → excluir terminated
+		query["employeeProfile.employmentStatus"] = {$ne: "terminated"};
+	}
+	// Si excludeTerminated === false → sin filtro → incluir todos
 
 	if (filter.department)
 		query["employeeProfile.department"] = filter.department;
@@ -350,9 +352,6 @@ export async function updateEmploymentStatus(
 		updatedAt: now,
 	};
 
-	// LOG TEMPORAL
-	logger.info({ id, orgId, status, userStatus: userStatusMap[status] }, 'updateEmploymentStatus fields');
-
 	const result = await getUserCollection().findOneAndUpdate(
 		{
 			_id: new ObjectId(id),
@@ -362,9 +361,10 @@ export async function updateEmploymentStatus(
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
-	  // LOG TEMPORAL
-
-	logger.info({ result }, 'updateEmploymentStatus result');
+	// Invalidar cache Redis del usuario afectado
+	if (result) {
+		await getRedisClient().del(`auth:user:${id}`);
+	}
 
 	return result ? await toUser(result as UserDocument) : null;
 }

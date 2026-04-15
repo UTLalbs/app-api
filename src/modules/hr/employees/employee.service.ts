@@ -72,8 +72,6 @@ export async function editEmployeeProfile(
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
 	if ( !existing ) throw new NotFoundError( "Employee" );
-	
-	  logger.info({ fields }, 'editEmployeeProfile fields');
 
 	// Inicializar arrays faltantes
 	await initEmployeeArrays(id, orgId);
@@ -135,8 +133,6 @@ export async function changeEmploymentStatus(
 
 	const updated = await updateEmploymentStatus(id, orgId, status);
 	if (!updated) throw new NotFoundError("Employee");
-
-	logger.info({employeeId: id, status}, "Employment status changed");
 
 	return updated;
 }
