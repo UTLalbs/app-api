@@ -25,7 +25,6 @@ import
   createChecklistItem,
   updateChecklistItem,
   deleteChecklistItemHandler,
-  getEmployeeAuditLog,
 } from './employee.controller';
 import {
   listEmployeesSchema,
@@ -43,7 +42,6 @@ import {
   createChecklistItemSchema,
   updateChecklistItemSchema,
   itemIdParamSchema,
-  auditLogQuerySchema,
 } from './employee.validator';
 
 // ── Multer — memory storage ────────────────────────────────────────────────
@@ -195,13 +193,4 @@ employeeRouter.delete(
   validate(itemIdParamSchema),
   authorize('empoyees', 'delete'),
   deleteChecklistItemHandler,
-);
-
-// ── Audit Log ──────────────────────────────────────────────────────────────
-
-employeeRouter.get(
-  '/:id/audit-log',
-  validate(auditLogQuerySchema),
-  authorize('empoyees', 'read'),
-  getEmployeeAuditLog,
 );

@@ -39,17 +39,6 @@ export type WaivedReason =
 	| "director_approval"
 	| "other";
 
-export type AuditAction =
-	| "document_uploaded"
-	| "document_verified"
-	| "document_rejected"
-	| "document_deleted"
-	| "document_replaced"
-	| "item_waived"
-	| "item_restored"
-	| "alert_configured"
-	| "date_edited"
-	| "item_added";
 
 export type DocumentType =
 	| "ine"
@@ -289,17 +278,7 @@ export interface ChecklistItemDto {
   waivedNote:   string | null;
 }
 
-// ── Subdocumentos — Audit Log ──────────────────────────────────────────────
 
-export interface AuditLogEntry {
-	_id: ObjectId;
-	action: AuditAction;
-	entityId: string;
-	entityType: "document" | "checklist_item";
-	changedBy: ObjectId;
-	changedAt: Date;
-	metadata: Record<string, unknown>;
-}
 
 // ── Populated types ────────────────────────────────────────────────────────
 
@@ -338,7 +317,6 @@ export interface EmployeeProfileDocument {
   vehicleOperator:   VehicleOperator | null;
   documents:         EmployeeDocument[];
   checklist:         ChecklistItem[];       // ← ObjectId
-  auditLog:          AuditLogEntry[];
 }
 
 // ── Domain — para response al frontend ────────────────────────────────────

@@ -9,7 +9,6 @@ import {
 	getLastFour,
 } from "./employee.encryption";
 import type {
-	AuditLogEntry,
 	BankAccount,
 	ChecklistItem,
 	ChecklistStatus,
@@ -23,7 +22,6 @@ import type {
 } from "./employee.types";
 
 // ── Proyección base para employees ────────────────────────────────────────
-// Excluye auditLog y bankAccounts encriptados por default
 
 const EMPLOYEE_PROJECTION = {
 	_id: 1,
@@ -70,7 +68,6 @@ const EMPLOYEE_PROJECTION = {
 	"employeeProfile.bankAccounts.isDefault": 1,
 	"employeeProfile.bankAccounts.documentUrl": 1,
 	"employeeProfile.bankAccounts.createdAt": 1,
-	// auditLog excluido por default
 } as const;
 
 // ── Helper — inicializar arrays del employeeProfile ────────────────────────
@@ -90,7 +87,6 @@ export async function initEmployeeArrays(
 				"employeeProfile.emergencyContacts": 1,
 				"employeeProfile.documents": 1,
 				"employeeProfile.checklist": 1,
-				"employeeProfile.auditLog": 1,
 			},
 		},
 	);
@@ -105,8 +101,6 @@ export async function initEmployeeArrays(
 		setFields["employeeProfile.documents"] = [];
 	if (!Array.isArray(ep?.checklist))
 		setFields["employeeProfile.checklist"] = [];
-	if (!Array.isArray(ep?.auditLog)) setFields["employeeProfile.auditLog"] = [];
-
 	if (Object.keys(setFields).length > 0) {
 		await getUserCollection().updateOne(
 			{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
@@ -193,7 +187,6 @@ async function toUser(doc: UserDocument): Promise<User> {
 					bankAccounts: Array.isArray(ep.bankAccounts) ? ep.bankAccounts : [],
 					documents: Array.isArray(ep.documents) ? ep.documents : [],
 					checklist,
-					auditLog: Array.isArray(ep.auditLog) ? ep.auditLog : [],
 					vehicleOperator: ep.vehicleOperator ?? null,
 					currentAddress: ep.currentAddress ?? {
 						sameAsFiscal: true,
@@ -301,26 +294,15 @@ export async function updateEmployeeProfile(
 	id: string,
 	orgId: string,
 	fields: Partial<EmployeeProfileDocument>,
-	auditEntries: AuditLogEntry[],
 ): Promise<User | null> {
 	if (!ObjectId.isValid(id)) return null;
 
 	const setFields: Record<string, unknown> = {updatedAt: new Date()};
 
-	// Mapear cada campo de employeeProfile con $set puntual
 	for (const [key, value] of Object.entries(fields)) {
 		if (value !== undefined) {
 			setFields[`employeeProfile.${key}`] = value;
 		}
-	}
-
-	const update: Record<string, unknown> = {$set: setFields};
-
-	// Agregar auditLog entries si hay cambios
-	if (auditEntries.length > 0) {
-		update.$push = {
-			"employeeProfile.auditLog": {$each: auditEntries},
-		};
 	}
 
 	const result = await getUserCollection().findOneAndUpdate(
@@ -330,7 +312,7 @@ export async function updateEmployeeProfile(
 			deletedAt: null,
 			"employeeProfile.isEmployee": true,
 		},
-		update,
+		{$set: setFields},
 		{returnDocument: "after", projection: EMPLOYEE_PROJECTION},
 	);
 
@@ -768,65 +750,6 @@ export async function removeChecklistItem(
 	);
 
 	return result.modifiedCount > 0;
-}
-
-// ── Audit Log ──────────────────────────────────────────────────────────────
-
-export async function findAuditLog(
-	id: string,
-	orgId: string,
-	filter: {
-		action?: string;
-		entityType?: string;
-		from?: Date;
-		to?: Date;
-		limit?: number;
-	},
-): Promise<AuditLogEntry[]> {
-	if (!ObjectId.isValid(id)) return [];
-
-	const doc = await getUserCollection().findOne(
-		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
-		{projection: {"employeeProfile.auditLog": 1}},
-	);
-
-	let entries = doc?.employeeProfile?.auditLog ?? [];
-
-	if (filter.action) {
-		entries = entries.filter((e) => e.action === filter.action);
-	}
-
-	if (filter.entityType) {
-		entries = entries.filter((e) => e.entityType === filter.entityType);
-	}
-
-	if (filter.from) {
-		entries = entries.filter((e) => e.changedAt >= filter.from!);
-	}
-
-	if (filter.to) {
-		entries = entries.filter((e) => e.changedAt <= filter.to!);
-	}
-
-	return entries
-		.sort((a, b) => b.changedAt.getTime() - a.changedAt.getTime())
-		.slice(0, filter.limit ?? 50);
-}
-
-export async function addAuditEntry(
-	id: string,
-	orgId: string,
-	entry: Omit<AuditLogEntry, "_id">,
-): Promise<void> {
-	if (!ObjectId.isValid(id)) return;
-
-	await getUserCollection().updateOne(
-		{_id: new ObjectId(id), orgId: new ObjectId(orgId)},
-		{
-			$push: {"employeeProfile.auditLog": {_id: new ObjectId(), ...entry}},
-			$set: {updatedAt: new Date()},
-		},
-	);
 }
 
 // ── Helpers para alertas (cron job) ───────────────────────────────────────

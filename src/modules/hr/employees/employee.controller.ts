@@ -20,7 +20,6 @@ import {
 	addCustomChecklistItem,
 	editChecklistItem,
 	deleteChecklistItem,
-	getAuditLog,
 	computeChecklistMeta,
 } from "./employee.service";
 import type {
@@ -32,7 +31,6 @@ import type {
 	WaivedReason,
 } from "./employee.types";
 import type {
-	AuditLogQueryInput,
 	CreateBankAccountInput,
 	CreateChecklistItemInput,
 	CreateEmergencyContactInput,
@@ -358,18 +356,3 @@ export const deleteChecklistItemHandler = asyncHandler(
 	},
 );
 
-// ── Audit Log ──────────────────────────────────────────────────────────────
-
-export const getEmployeeAuditLog = asyncHandler(
-	async (req: Request & AuditLogQueryInput, res: Response) => {
-		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
-		const entries = await getAuditLog(String(req.params.id), orgId, {
-			action: req.query.action as string | undefined,
-			entityType: req.query.entityType as string | undefined,
-			from: req.query.from ? new Date(req.query.from as string) : undefined,
-			to: req.query.to ? new Date(req.query.to as string) : undefined,
-			limit: Number(req.query.limit) || 50,
-		});
-		res.json({success: true, data: entries});
-	},
-);

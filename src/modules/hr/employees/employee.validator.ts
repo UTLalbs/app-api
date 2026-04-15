@@ -415,18 +415,6 @@ export const itemIdParamSchema = z.object({
 	}),
 });
 
-// ── Audit log ──────────────────────────────────────────────────────────────
-
-export const auditLogQuerySchema = z.object({
-	params: z.object({id: z.string().length(24)}),
-	query: z.object({
-		action: z.string().optional(), // ← reemplaza field
-		entityType: z.enum(["document", "checklist_item"]).optional(),
-		from: z.string().datetime().optional(),
-		to: z.string().datetime().optional(),
-		limit: z.coerce.number().min(1).max(200).default(50),
-	}),
-});
 
 // ── Tipos inferidos ────────────────────────────────────────────────────────
 
@@ -451,4 +439,4 @@ export type CreateChecklistItemInput = z.infer<
 export type UpdateChecklistItemInput = z.infer<
 	typeof updateChecklistItemSchema
 >;
-export type AuditLogQueryInput = z.infer<typeof auditLogQuerySchema>;
+

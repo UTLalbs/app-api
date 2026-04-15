@@ -30,12 +30,10 @@ import {
 	addChecklistItems,
 	updateChecklistItem,
 	removeChecklistItem,
-	findAuditLog,
-	addAuditEntry,
+
 	initEmployeeArrays,
 } from "./employee.repository";
 import type {
-	AuditAction,
 	ChecklistStatus,
 	DocumentStatus,
 	DocumentType,
@@ -69,7 +67,7 @@ export async function editEmployeeProfile(
 	id: string,
 	orgId: string,
 	fields: Partial<EmployeeProfileDocument>,
-	actorId: string,
+	_actorId: string,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
@@ -77,7 +75,7 @@ export async function editEmployeeProfile(
 	// Inicializar arrays faltantes — delegar al helper
 	await initEmployeeArrays(id, orgId);
 
-	const updated = await updateEmployeeProfile(id, orgId, fields, []);
+	const updated = await updateEmployeeProfile(id, orgId, fields);
 	if (!updated) throw new NotFoundError("Employee");
 
 	// Si isEmployee acaba de activarse → generar checklist automáticamente
@@ -102,7 +100,7 @@ export async function editEmployeeProfile(
 	if (!final) throw new NotFoundError("Employee");
 
 	logger.info(
-		{employeeId: id, changedFields: Object.keys(fields).length, actorId},
+		{employeeId: id, changedFields: Object.keys(fields).length},
 		"Employee profile updated",
 	);
 
@@ -198,7 +196,7 @@ export async function uploadDocument(
 		expiresAt: Date | null;
 		alertDays: number;
 	},
-	actorId: string,
+	_actorId: string,
 ) {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
@@ -213,11 +211,6 @@ export async function uploadDocument(
 		file.originalname,
 	);
 	const upload = await uploadFile(key, file.buffer, file.mimetype);
-
-	// Verificar si existe documento previo con mismo type
-	const prevDoc = existing.employeeProfile?.documents?.find(
-		(d) => d.type === meta.type,
-	);
 
 	const now = new Date();
 
@@ -245,27 +238,9 @@ export async function uploadDocument(
 
 	if (!doc) throw new NotFoundError("Employee");
 
-	// Audit log — document_replaced o document_uploaded
-	const action: AuditAction = prevDoc
-		? "document_replaced"
-		: "document_uploaded";
-
-	await addAuditEntry(id, orgId, {
-		action,
-		entityId: doc._id.toHexString(),
-		entityType: "document",
-		changedBy: new ObjectId(actorId),
-		changedAt: now,
-		metadata: {
-			fileName: meta.name,
-			fileSize: upload.fileSize,
-			type: meta.type,
-			...(prevDoc && {replacedDocId: prevDoc._id.toString()}),
-		},
-	});
 
 	logger.info(
-		{employeeId: id, type: meta.type, key, action},
+		{employeeId: id, type: meta.type, key},
 		"Document uploaded",
 	);
 
@@ -289,7 +264,7 @@ export async function editDocument(
 		verifiedAt?: Date | null;
 		verifiedBy?: string | null;
 	},
-	actorId: string,
+	_actorId: string,
 ): Promise<User> {
 	const verifiedBy = fields.verifiedBy
 		? new ObjectId(fields.verifiedBy)
@@ -348,26 +323,7 @@ export async function editDocument(
 		}
 	}
 
-	// ── Audit log ──────────────────────────────────────────────────────────
-	const action: AuditAction =
-		fields.status === "verified"
-			? "document_verified"
-			: fields.status === "rejected"
-				? "document_rejected"
-				: fields.alertDays !== undefined
-					? "alert_configured"
-					: fields.expiresAt !== undefined
-						? "date_edited"
-						: "date_edited";
-
-	await addAuditEntry(id, orgId, {
-		action,
-		entityId: docId,
-		entityType: "document",
-		changedBy: new ObjectId(actorId),
-		changedAt: new Date(),
-		metadata: fields as Record<string, unknown>,
-	});
+	
 
 	return updated;
 }
@@ -376,7 +332,7 @@ export async function deleteDocument(
 	id: string,
 	orgId: string,
 	docId: string,
-	actorId: string,
+	_actorId: string,
 ): Promise<void> {
 	const employee = await findEmployeeById(id, orgId);
 	if (!employee) throw new NotFoundError("Employee");
@@ -390,19 +346,6 @@ export async function deleteDocument(
 	const result = await removeEmployeeDocument(id, orgId, docId);
 	if (!result) throw new NotFoundError("Document");
 
-	// Audit log
-	await addAuditEntry(id, orgId, {
-		action: "document_deleted",
-		entityId: docId,
-		entityType: "document",
-		changedBy: new ObjectId(actorId),
-		changedAt: new Date(),
-		metadata: {
-			fileName: doc.name,
-			fileSize: (doc as unknown as {fileSize: number}).fileSize,
-			type: doc.type,
-		},
-	});
 
 	// Eliminar de S3 — fire and forget
 	const key = extractKeyFromUrl(result.fileUrl);
@@ -524,7 +467,7 @@ export async function addCustomChecklistItem(
 	id: string,
 	orgId: string,
 	data: {type: string; label: string; required: boolean},
-	actorId: string,
+	_actorId: string,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
@@ -551,15 +494,6 @@ export async function addCustomChecklistItem(
 
 	if (!updated) throw new NotFoundError("Employee");
 
-	// Audit log
-	await addAuditEntry(id, orgId, {
-		action: "item_added",
-		entityId: data.type,
-		entityType: "checklist_item",
-		changedBy: new ObjectId(actorId),
-		changedAt: new Date(),
-		metadata: {type: data.type, label: data.label},
-	});
 
 	return updated;
 }
@@ -648,25 +582,6 @@ export async function editChecklistItem(
 	const updated = await updateChecklistItem(id, orgId, itemId, fields);
 	if (!updated) throw new NotFoundError("ChecklistItem");
 
-	// Audit log
-	const action: AuditAction =
-		data.status === "waived"
-			? "item_waived"
-			: data.status === "pending"
-				? "item_restored"
-				: data.alertDays !== undefined
-					? "alert_configured"
-					: "alert_configured";
-
-	await addAuditEntry(id, orgId, {
-		action,
-		entityId: itemId,
-		entityType: "checklist_item",
-		changedBy: new ObjectId(actorId),
-		changedAt: new Date(),
-		metadata: data as Record<string, unknown>,
-	});
-
 	return updated;
 }
 
@@ -679,23 +594,6 @@ export async function deleteChecklistItem(
 	if (!deleted) throw new NotFoundError("ChecklistItem");
 }
 
-// ── Audit Log ──────────────────────────────────────────────────────────────
-
-export async function getAuditLog(
-	id: string,
-	orgId: string,
-	filter: {
-		action?: string;
-		entityType?: string;
-		from?: Date;
-		to?: Date;
-		limit?: number;
-	},
-): Promise<unknown[]> {
-	const existing = await findEmployeeById(id, orgId);
-	if (!existing) throw new NotFoundError("Employee");
-	return findAuditLog(id, orgId, filter);
-}
 // ── Checklist stats ────────────────────────────────────────────────────────
 
 export function computeChecklistMeta(
