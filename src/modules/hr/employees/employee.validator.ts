@@ -2,28 +2,14 @@ import {z} from "zod";
 
 // ── Enums ──────────────────────────────────────────────────────────────────
 
-const employeeTypeSchema = z.enum(["operator", "admin"]);
-
-const positionSchema = z.enum([
-	"border_driver",
-	"national_driver",
-	"manager",
-	"mechanic",
-	"executive",
-	"security_guard",
-	"k9_inspector",
-	"janitor",
-	"messenger",
-]);
-
-const departmentSchema = z.enum([
-	"operations",
-	"maintenance",
-	"administration",
-	"accounting",
-	"security",
-	"human_resources",
-]);
+// `position` y `department` ya no son enums fijos — son keys de catálogo
+// per-org (colecciones `positions` y `departments`). Aceptamos cualquier
+// string snake_case; la validación real vs. el catálogo vive en el service.
+const catalogKeySchema = z
+	.string()
+	.min(1)
+	.max(60)
+	.regex(/^[a-z0-9_]+$/);
 
 const employmentStatusSchema = z.enum([
   'active',
@@ -240,9 +226,8 @@ const vehicleOperatorSchema = z.object({
 export const updateEmployeeProfileSchema = z.object({
 	params: z.object({id: z.string().length(24)}),
 	body: z.object({
-		employeeType: employeeTypeSchema.nullable().optional(),
-		position: positionSchema.nullable().optional(),
-		department: departmentSchema.nullable().optional(),
+		position: catalogKeySchema.nullable().optional(),
+		department: catalogKeySchema.nullable().optional(),
 		managerId: z.string().length(24).nullable().optional(),
 		profileId: z.string().length(24).nullable().optional(),
 		dateOfHire: z.coerce.date().nullable().optional(),
@@ -275,9 +260,8 @@ export const updateEmploymentStatusSchema = z.object({
 export const listEmployeesSchema = z.object({
   query: z.object({
     search:              z.string().optional(),
-    department:          departmentSchema.optional(),
-    employeeType:        employeeTypeSchema.optional(),
-    position:            positionSchema.optional(),
+    department:          catalogKeySchema.optional(),
+    position:            catalogKeySchema.optional(),
     driverStatus:        driverStatusSchema.optional(),
     employmentStatus:    employmentStatusSchema.optional(),
     excludeTerminated:   z.enum(['true', 'false']).optional(),

@@ -27,6 +27,11 @@ esta razón. El repo vive en `employee.repository.ts` y filtra por `employeeProf
 
 ## Reglas de negocio
 
+- **`position` y `department`**: ya no son enums fijos — son `string | null`
+  que referencian `key` de los catálogos per-org `positions` y `departments`
+  (ver `hr/positions/README.md` y `hr/departments/README.md`). El campo
+  `employeeType` fue eliminado; la distinción operador/admin quedó absorbida
+  por `position`.
 - Al crear un empleado se genera su `employeeProfile` inicial con status `'pending'`
   y checklist vacío.
 - Cambiar `employmentStatus` (`active`/`leave`/`vacation`/`disability`/`suspended`/`terminated`)

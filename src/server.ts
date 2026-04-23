@@ -12,8 +12,10 @@ import {startAuditWorker, stopAuditWorker} from "./infrastructure/jobs/audit.wor
 import {registerEmployeeAlertsJob} from "./infrastructure/jobs/employee.alerts.job";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
+import {createDepartmentIndexes} from "./modules/hr/departments/department.model";
 import {createDocumentCatalogIndexes} from "./modules/hr/document-catalog/document-catalog.model";
 import {createDocumentProfileIndexes} from "./modules/hr/document-profiles/document-profile.model";
+import {createPositionIndexes} from "./modules/hr/positions/position.model";
 import {createNotificationIndexes} from "./modules/notifications/notification.model";
 import {createOrganizationIndexes} from "./modules/organizations/organization.model";
 import {createRoleIndexes} from "./modules/roles/role.model";
@@ -36,6 +38,8 @@ async function bootstrap(): Promise<void> {
 		createNotificationIndexes(),
 		createDocumentCatalogIndexes(),
 		createDocumentProfileIndexes(),
+		createPositionIndexes(),
+		createDepartmentIndexes(),
 		registerEmployeeAlertsJob(),
 	]);
 

@@ -171,6 +171,8 @@ target emitir.
 | `hr/employees` | `/api/v1/employees` | `users` (subdoc `employeeProfile`) | Empleados — RH |
 | `hr/document-catalog` | `/api/v1/hr/document-catalog` | `document_catalog` | Catálogo de tipos de documentos |
 | `hr/document-profiles` | `/api/v1/hr/document-profiles` | `document_profiles` | Perfiles/bundles de documentos por puesto |
+| `hr/positions` | `/api/v1/hr/positions` | `positions` | Catálogo de puestos per-org (ej. "Operador Fronterizo") |
+| `hr/departments` | `/api/v1/hr/departments` | `departments` | Catálogo de departamentos per-org (ej. "Operaciones") |
 
 Módulos sin `*.repository.ts` por diseño:
 - **`auth`**: opera sobre `users` vía `user.repository` y sobre `tokens` vía `token.service`. No necesita uno propio.

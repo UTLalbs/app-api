@@ -12,7 +12,9 @@ import { computeDiff } from '../../shared/utils/diff';
 import { generateSlug } from '../../shared/utils/slug';
 import { emitAuditEvent } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit.types';
+import { initDepartmentCatalogForOrg } from '../hr/departments/department.service';
 import { initDocumentCatalogForOrg } from '../hr/document-catalog/document-catalog.service';
+import { initPositionCatalogForOrg } from '../hr/positions/position.service';
 
 
 import {
@@ -89,9 +91,15 @@ export async function registerOrganization(
 
   await cacheDel(CacheKeys.orgList());
 
-  // Inicializar catálogo de documentos — fire and forget
+  // Inicializar catálogos de RH — fire and forget (no bloquean el registro)
   initDocumentCatalogForOrg(org.id, actorId).catch((err) =>
     logger.error({ err, orgId: org.id }, 'Failed to seed document catalog'),
+  );
+  initPositionCatalogForOrg(org.id, actorId).catch((err) =>
+    logger.error({ err, orgId: org.id }, 'Failed to seed position catalog'),
+  );
+  initDepartmentCatalogForOrg(org.id, actorId).catch((err) =>
+    logger.error({ err, orgId: org.id }, 'Failed to seed department catalog'),
   );
 
   logger.info({ orgId: org.id, slug }, 'Organization registered');

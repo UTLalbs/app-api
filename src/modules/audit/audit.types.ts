@@ -50,6 +50,13 @@ export type AuditAction =
   | 'employee_deleted'
   | 'employee_status_changed'
   | 'employee_pii_updated'
+  // catalogs de RH (puestos y departamentos)
+  | 'position_created'
+  | 'position_updated'
+  | 'position_deleted'
+  | 'department_created'
+  | 'department_updated'
+  | 'department_deleted'
   // documents
   | 'doc_catalog_item_created'
   | 'doc_catalog_item_updated'

@@ -58,11 +58,6 @@ export async function createUserIndexes(): Promise<void> {
       name: 'employee_isEmployee',
     },
     {
-      key: { 'employeeProfile.employeeType': 1 },
-      sparse: true,
-      name: 'employee_employeeType',
-    },
-    {
       key: { 'employeeProfile.department': 1 },
       sparse: true,
       name: 'employee_department',

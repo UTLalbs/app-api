@@ -251,6 +251,7 @@ export async function editX(id, dto, context) {
   - contactos de emergencia add/edit/delete (`employee_updated` + metadata.operation),
   - cuentas bancarias add/edit/delete (`employee_pii_updated` + metadata.operation),
   - documentos upload/update/delete (`employee_document_uploaded` / `employee_document_updated` / `employee_document_deleted`).
+- `hr/positions` y `hr/departments` (catálogos per-org): `position_created/_updated/_deleted`, `department_created/_updated/_deleted` — todos categoría `employees`, retención 7d.
 - `auth`: login_success, logout, logout_all, token_refreshed, impersonation_start/exit.
 
 ### Servicios con integración pendiente

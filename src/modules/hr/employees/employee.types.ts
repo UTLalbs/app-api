@@ -1,27 +1,11 @@
 import type {ObjectId} from "mongodb";
 
 // ── Enums ──────────────────────────────────────────────────────────────────
-
-export type EmployeeType = "operator" | "admin";
-
-export type EmployeePosition =
-	| "border_driver"
-	| "national_driver"
-	| "manager"
-	| "mechanic"
-	| "executive"
-	| "security_guard"
-	| "k9_inspector"
-	| "janitor"
-	| "messenger";
-
-export type EmployeeDepartment =
-	| "operations"
-	| "maintenance"
-	| "administration"
-	| "accounting"
-	| "security"
-	| "human_resources";
+//
+// `position` y `department` eran enums fijos; ahora son `string` (keys del
+// catálogo per-org en las colecciones `positions` y `departments`). El tipo
+// `EmployeeType` fue eliminado — la clasificación operador/admin quedó
+// absorbida por `position`.
 
 export type EmploymentStatus =
 	| "active"
@@ -306,9 +290,10 @@ export interface ChecklistItemPopulated extends Omit<
 
 export interface EmployeeProfileDocument {
 	isEmployee: boolean;
-	employeeType: EmployeeType | null;
-	position: EmployeePosition | null;
-	department: EmployeeDepartment | null;
+	// Keys de los catálogos `positions` y `departments` (per-org).
+	// Null significa que el empleado aún no tiene puesto/departamento asignado.
+	position: string | null;
+	department: string | null;
 	managerId: ObjectId | null;
 	profileId: ObjectId | null;
 	dateOfHire: Date | null;
@@ -371,9 +356,8 @@ export interface ChecklistTemplate {
 
 export interface EmployeeQueryFilter {
 	search?: string;
-	department?: EmployeeDepartment;
-	employeeType?: EmployeeType;
-	position?: EmployeePosition;
+	department?: string;          // key del catálogo `departments`
+	position?: string;            // key del catálogo `positions`
 	driverStatus?: DriverStatus;
 	employmentStatus?: EmploymentStatus;
 	excludeTerminated?: boolean;

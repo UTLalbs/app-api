@@ -25,10 +25,7 @@ import {
 	changeEmploymentStatus,
 } from "./employee.service";
 import type {
-	EmployeeDepartment,
-	EmployeePosition,
 	EmployeeProfileDocument,
-	EmployeeType,
 	RenewalFrom,
 	WaivedReason,
 	EmploymentStatus,
@@ -55,9 +52,8 @@ export const getEmployees = asyncHandler(
 
 		const {employees, total} = await listEmployees(orgId, {
 			search: req.query.search as string | undefined,
-			department: req.query.department as EmployeeDepartment | undefined,
-			employeeType: req.query.employeeType as EmployeeType | undefined,
-			position: req.query.position as EmployeePosition | undefined,
+			department: req.query.department as string | undefined,
+			position: req.query.position as string | undefined,
 			driverStatus: req.query.driverStatus as
 				| "available"
 				| "on_trip"

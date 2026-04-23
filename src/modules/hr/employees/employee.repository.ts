@@ -44,7 +44,6 @@ const EMPLOYEE_PROJECTION = {
 	createdAt: 1,
 	updatedAt: 1,
 	"employeeProfile.isEmployee": 1,
-	"employeeProfile.employeeType": 1,
 	"employeeProfile.position": 1,
 	"employeeProfile.department": 1,
 	"employeeProfile.managerId": 1,
@@ -267,8 +266,6 @@ export async function findAllEmployees(
 
 	if (filter.department)
 		query["employeeProfile.department"] = filter.department;
-	if (filter.employeeType)
-		query["employeeProfile.employeeType"] = filter.employeeType;
 	if (filter.position) query["employeeProfile.position"] = filter.position;
 	if (filter.driverStatus) {
 		query["employeeProfile.vehicleOperator.driverStatus"] = filter.driverStatus;
