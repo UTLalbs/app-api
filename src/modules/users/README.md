@@ -43,3 +43,25 @@ Este módulo es el núcleo de identidad. Otros dominios viven como subdocumentos
 - `auth` busca/crea usuarios aquí.
 - `hr/employees` lee/escribe `employeeProfile`.
 - `tasks`, `notifications` referencian `userId`.
+
+## Auditoría
+
+| Acción | Trigger | Retención |
+|---|---|---|
+| `user_created` | `POST /` | 7d |
+| `user_updated` | `PATCH /:id` | 7d |
+| `user_deleted` | `DELETE /:id` (soft delete) | 7d |
+| `user_status_changed` | `PATCH /:id/status` | 180d |
+| `user_role_assigned` | cambio de `roles[]` en update | 180d |
+| `user_read` | `GET /:id` **si `actor.id !== target.id`** | 7d |
+
+- **Self-reads** (cuando un user consulta su propio detalle, típicamente desde
+  el endpoint `GET /me` o al refrescar el perfil) **no se auditan** — solo las
+  lecturas cross-actor (un super_admin viendo a otro user, por ejemplo).
+- La entrada auditada del service es `readUserDetail(id, orgId, context)`.
+  `getUserById(id, orgId)` sigue existiendo como lectura interna sin emit
+  (la usan `authenticate`, `authorize` y el cache de permisos) — no la
+  expongas directamente desde un controller HTTP.
+
+Detalle de retención, contrato del evento y endpoints del dashboard en
+`src/modules/audit/README.md`.

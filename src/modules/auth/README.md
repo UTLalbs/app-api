@@ -14,8 +14,8 @@ Prefijo: `/api/v1/auth`
 | GET  | `/microsoft`          | público | Inicia flujo OIDC con Microsoft. |
 | GET  | `/microsoft/callback` | público | Callback de Microsoft. |
 | POST | `/refresh`            | cookie `refresh_token` | Rota el par access/refresh. |
-| POST | `/logout`             | público | Limpia cookies y revoca el refresh token actual. |
-| POST | `/logout-all`         | access_token | Revoca TODOS los refresh tokens del usuario. |
+| POST | `/logout`             | público (tolera token expirado) | Limpia cookies, revoca el refresh token actual y emite audit. |
+| POST | `/logout-all`         | access_token | Revoca TODOS los refresh tokens del usuario y emite audit. |
 | GET  | `/me`                 | access_token | Devuelve `req.user` actual. |
 | POST | `/impersonate/:orgId` | access_token (super_admin) | Emite token con contexto impersonado (TTL 8h). |
 | POST | `/impersonate/exit`   | access_token | Sale del modo impersonación. |
@@ -56,6 +56,33 @@ Se eliminan tras canje exitoso.
 - Usuarios `inactive` o `suspended` no pueden iniciar sesión (`ForbiddenError`).
 - Usuarios `pending` sí pueden loguearse (se loguea warn para visibility).
 - Al hacer refresh se revoca el refresh token previo (rotación obligatoria).
+- `/logout` es público (sin `authenticate`) para permitir cerrar sesiones con
+  access token expirado. El controller resuelve la identidad del actor en 3
+  intentos: verify del `refresh_token` → decode sin verify del `access_token`
+  → `findUserById` para poblar el `AuditContext.actor`. Así el evento `logout`
+  se emite con actor completo (email, displayName, impersonating si aplicaba)
+  aunque el access cookie haya caducado.
+
+## Auditoría
+
+Acciones emitidas por este módulo (detalle de retención y contrato en
+`src/modules/audit/README.md`):
+
+| Acción | Trigger | Retención |
+|---|---|---|
+| `login_success` | OIDC callback exitoso | 7d |
+| `login_failed` | Rechazo de login (email no verificado, cuenta deshabilitada) | 180d |
+| `logout` | `POST /logout` | 7d |
+| `logout_all` | `POST /logout-all` | 7d |
+| `token_refreshed` | `POST /refresh` | 7d |
+| `impersonation_start` | `POST /impersonate/:orgId` | 180d |
+| `impersonation_exit` | `POST /impersonate/exit` | 180d |
+
+**Impersonation**: desde `d8248f8`, `impersonation_start` emite con
+`impersonating: { orgId, orgName }` y `orgId` top-level apuntando a la org
+destino — aunque el token nuevo todavía no aplica en esa misma request.
+Resultado: toda la sesión impersonada (`start` → acciones → `exit`) queda
+filtrable en el dashboard con un solo query `impersonating.orgId = X`.
 
 ## Cache
 

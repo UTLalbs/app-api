@@ -49,3 +49,41 @@ Campos encriptados antes de guardar (ver `employee.encryption.ts`):
 - `rfc`, `curp`, `nss`, `bankAccount`, `taxId`.
 
 Usar `decryptEmployeeFields` al leer para los usuarios autorizados.
+
+## Normalización de RFC
+
+Los campos `rfcValidatedAt` y `rfcValidatedStatus` son **metadata de sistema** —
+solo cambian cuando el RFC realmente cambia. El frontend puede reenviarlos en
+cada submit del formulario (por haber disparado la validación al abrir el form),
+pero `editEmployeeProfile` los descarta del DTO cuando:
+
+- `rfc` no viene en el payload, o
+- `rfc` viene igual al valor guardado.
+
+Si el `rfc` entrante coincide con el actual, también se elimina del DTO para
+que no aparezca en `changedFields` ni dispare un diff vacío. Resultado:
+guardar el form sin tocar el RFC no ensucia el audit log ni re-valida contra
+FacturoPorTi.
+
+## Auditoría
+
+| Operación | Action | Categoría | Retención | Notas |
+|---|---|---|---|---|
+| `GET /:id` | `employee_pii_read` | `reads` | 180d | Siempre — lectura sensible |
+| `GET /:id/documents/:docId/url` | `employee_document_url_issued` | `reads` | 180d | URL presignada S3 |
+| `PATCH /:id/profile` (campos no PII) | `employee_updated` | `employees` | 7d | Diff real (`computeDiff`) |
+| `PATCH /:id/profile` (campos PII: rfc / curp / nss / bankAccounts) | `employee_pii_updated` | `employees` | 180d | Diff con valores enmascarados |
+| `PATCH /:id/employment-status` | `employee_status_changed` | `employees` | 180d | Diff: `employmentStatus` old/new |
+| Contactos de emergencia add / edit / delete | `employee_updated` | `employees` | 7d | `metadata.operation = emergency_contact_added | _updated | _deleted` |
+| Cuentas bancarias add / edit / delete | `employee_pii_updated` | `employees` | 180d | `metadata.operation = bank_account_added | _updated | _deleted` |
+| Documentos upload | `employee_document_uploaded` | `documents` | 180d | |
+| Documentos update (status, notas, fechas, renewal) | `employee_document_updated` | `documents` | 180d | Diff real |
+| Documentos delete | `employee_document_deleted` | `documents` | 180d | |
+
+- La distinción PII vs no-PII en `PATCH /:id/profile` se deriva del **diff real**
+  post-`computeDiff`, no de los campos del DTO — si el frontend envía `rfc` pero
+  no cambió, el evento final es `employee_updated` (no `employee_pii_updated`).
+- Si el diff resulta vacío (nada cambió), **no se emite evento**.
+
+Detalle de retención, contrato del evento y convenciones de `metadata.operation`
+en `src/modules/audit/README.md`.

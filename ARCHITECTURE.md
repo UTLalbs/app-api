@@ -160,7 +160,7 @@ target emitir.
 | Módulo | Prefijo | Colección Mongo | Dominio |
 |---|---|---|---|
 | `auth` | `/api/v1/auth` | (usa `users`) | OIDC login Google/Microsoft, refresh, logout, me, impersonate |
-| `users` | `/api/v1/users` | `users` | CRUD usuarios del sistema (staff, admins, super_admin) |
+| `users` | `/api/v1/users` | `users` | CRUD usuarios del sistema (staff, admins, super_admin). Emite `user_read` en `GET /:id` cuando `actor.id !== target.id` |
 | `organizations` | `/api/v1/organizations` | `organizations` | Tenants del SaaS |
 | `roles` | `/api/v1/roles` | `roles` | Roles del sistema + permisos (RBAC resource/action) |
 | `tax` | `/api/v1/tax` | (API externa) | Integración FacturoPorTi — CP y validación RFC |
@@ -262,7 +262,10 @@ del dashboard.
 **Impersonation**: `super_admin` puede emitir un token con `impersonating: { orgId, orgName }`
 para actuar como si perteneciera a esa org. TTL más largo (8h). Todas las acciones durante
 impersonación quedan registradas en `audit_logs` con el flag `impersonating` presente para
-que el dashboard pueda distinguirlas.
+que el dashboard pueda distinguirlas — incluyendo el propio evento `impersonation_start`,
+que se emite con `impersonating.orgId` apuntando a la org destino aunque el token nuevo
+todavía no aplique en esa request. Resultado: toda la sesión (`start` → acciones → `exit`)
+es filtrable con un solo query `impersonating.orgId = X`.
 
 ---
 
