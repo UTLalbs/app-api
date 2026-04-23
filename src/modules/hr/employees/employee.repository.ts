@@ -154,6 +154,27 @@ async function toChecklistItemDto(
 
 // ── Conversión ─────────────────────────────────────────────────────────────
 
+// Normaliza `license.class` legacy (string) a array. Docs creados antes del
+// cambio a multi-clase pueden tener `class: "B"`; la API siempre devuelve
+// `class: ["B"]` para que el frontend no tenga que ramificar.
+function normalizeVehicleOperator<T extends {licenses?: unknown[]} | null | undefined>(
+	vo: T,
+): T {
+	if (!vo || !Array.isArray(vo.licenses)) return vo;
+	return {
+		...vo,
+		licenses: vo.licenses.map((lic) => {
+			if (lic && typeof lic === "object" && "class" in lic) {
+				const cls = (lic as {class: unknown}).class;
+				if (typeof cls === "string") {
+					return {...lic, class: [cls]};
+				}
+			}
+			return lic;
+		}),
+	} as T;
+}
+
 async function toUser(doc: UserDocument): Promise<User> {
 	const ep = doc.employeeProfile;
 
@@ -189,7 +210,7 @@ async function toUser(doc: UserDocument): Promise<User> {
 					bankAccounts: Array.isArray(ep.bankAccounts) ? ep.bankAccounts : [],
 					documents: Array.isArray(ep.documents) ? ep.documents : [],
 					checklist,
-					vehicleOperator: ep.vehicleOperator ?? null,
+					vehicleOperator: normalizeVehicleOperator(ep.vehicleOperator) ?? null,
 					currentAddress: ep.currentAddress ?? {
 						sameAsFiscal: true,
 						address: null,

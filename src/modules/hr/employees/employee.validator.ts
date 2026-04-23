@@ -116,10 +116,17 @@ const currentAddressSchema = z
 
 // ── Vehicle Operator ───────────────────────────────────────────────────────
 
+// `class` puede venir como string (clients legacy que solo soportan 1 clase) o como
+// array (nuevos clientes multi-clase). Normalizamos a array siempre.
+const driverLicenseClassSchema = z.preprocess(
+	(v) => (typeof v === "string" ? [v] : v),
+	z.array(z.enum(["A", "B", "C", "D", "E"])).min(1),
+);
+
 const driverLicenseSchema = z.object({
 	type: z.enum(["federal", "estatal", "utilitaria"]),
 	number: z.string().min(1),
-	class: z.enum(["A", "B", "C", "D", "E"]),
+	class: driverLicenseClassSchema,
 	issuedAt: z.coerce.date(),
 	expiresAt: z.coerce.date(),
 	state: z.string().nullable().optional(),

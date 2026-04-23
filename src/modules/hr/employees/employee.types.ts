@@ -99,11 +99,16 @@ export interface BankAccount {
 
 // ── Subdocumentos — Driver Documents ──────────────────────────────────────
 
+export type DriverLicenseClass = "A" | "B" | "C" | "D" | "E";
+
 export interface DriverLicense {
 	_id: ObjectId;
 	type: "federal" | "estatal" | "utilitaria";
 	number: string;
-	class: "A" | "B" | "C" | "D" | "E";
+	// Una licencia puede habilitar múltiples clases (ej. ["A", "B"] — trailer + carga).
+	// Backward-compat: docs antiguos pueden tener `class: string`; `toUser` los
+	// normaliza a array al leer.
+	class: DriverLicenseClass[];
 	issuedAt: Date;
 	expiresAt: Date;
 	state: string | null;
