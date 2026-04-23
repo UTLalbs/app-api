@@ -81,6 +81,9 @@ const envSchema = z.object({
 	S3_ACCESS_KEY_ID: z.string().min(1),
 	S3_SECRET_ACCESS_KEY: z.string().min(1),
 
+	// Audit archive (cold storage) — opcional; sin bucket el job se omite.
+	AUDIT_ARCHIVE_BUCKET: z.string().min(1).optional(),
+
 	// Encryption
 	ENCRYPTION_KEY: z
 		.string()

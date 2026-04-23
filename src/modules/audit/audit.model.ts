@@ -33,12 +33,13 @@ export async function createAuditIndexes(): Promise<void> {
       key: { category: 1, action: 1, createdAt: -1 },
       name: 'category_action_date',
     },
-    // TTL — los logs expiran después de 1 año (365 días)
-    // Ajusta según tus requisitos de retención
+    // TTL — Mongo elimina el documento cuando expiresAt ya pasó.
+    // El valor de expiresAt se calcula al insertar según la acción
+    // (7 días default, 180 días para acciones sensibles — ver RETENTION_DAYS).
     {
-      key: { createdAt: 1 },
+      key: { expiresAt: 1 },
       name: 'ttl_expiry',
-      expireAfterSeconds: 60 * 60 * 24 * 365,
+      expireAfterSeconds: 0,
     },
   ]);
 

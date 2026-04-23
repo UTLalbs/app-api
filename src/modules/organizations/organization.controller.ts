@@ -1,6 +1,7 @@
 import type {Request, Response} from "express";
 
 import {asyncHandler} from "../../shared/utils/asyncHandler";
+import {buildAuditContext} from "../../shared/utils/auditContext";
 
 import {
 	getOrganizationById,
@@ -39,6 +40,7 @@ export const createOrganization = asyncHandler(
 				contacts: req.body.contacts,
 			},
 			req.user!.id,
+			buildAuditContext(req),
 		);
 		res.status(201).json({success: true, data: org});
 	},
@@ -46,20 +48,24 @@ export const createOrganization = asyncHandler(
 
 export const updateOrganization = asyncHandler(
 	async (req: Request & UpdateOrganizationInput, res: Response) => {
-		const org = await editOrganization(String(req.params.id), {
-			name: req.body.name,
-			status: req.body.status,
-			settings: req.body.settings,
-			fiscalData: req.body.fiscalData,
-			contacts: req.body.contacts,
-		});
+		const org = await editOrganization(
+			String(req.params.id),
+			{
+				name: req.body.name,
+				status: req.body.status,
+				settings: req.body.settings,
+				fiscalData: req.body.fiscalData,
+				contacts: req.body.contacts,
+			},
+			buildAuditContext(req),
+		);
 		res.json({success: true, data: org});
 	},
 );
 
 export const deleteOrganization = asyncHandler(
 	async (req: Request, res: Response) => {
-		await removeOrganization(String(req.params.id));
+		await removeOrganization(String(req.params.id), buildAuditContext(req));
 		res.status(204).send();
 	},
 );

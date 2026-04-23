@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { asyncHandler } from '../../shared/utils/asyncHandler';
+import { buildAuditContext } from '../../shared/utils/auditContext';
 
 import {
   getRoleById,
@@ -23,30 +24,37 @@ export const getRoles = asyncHandler(async (req: Request, res: Response) => {
 
 export const createRole = asyncHandler(
   async (req: Request & CreateRoleInput, res: Response) => {
-    const role = await registerRole({
-      name: req.body.name,
-      description: req.body.description,
-      orgId: req.body.orgId ?? req.user!.orgId,
-      permissions: req.body.permissions,
-    });
+    const role = await registerRole(
+      {
+        name: req.body.name,
+        description: req.body.description,
+        orgId: req.body.orgId ?? req.user!.orgId,
+        permissions: req.body.permissions,
+      },
+      buildAuditContext(req),
+    );
     res.status(201).json({ success: true, data: role });
   },
 );
 
 export const updateRole = asyncHandler(
   async (req: Request & UpdateRoleInput, res: Response) => {
-    const role = await editRole(String(req.params.id), {
-      name: req.body.name,
-      description: req.body.description,
-      permissions: req.body.permissions,
-    });
+    const role = await editRole(
+      String(req.params.id),
+      {
+        name: req.body.name,
+        description: req.body.description,
+        permissions: req.body.permissions,
+      },
+      buildAuditContext(req),
+    );
     res.json({ success: true, data: role });
   },
 );
 
 export const deleteRole = asyncHandler(
   async (req: Request, res: Response) => {
-    await removeRole(String(req.params.id));
+    await removeRole(String(req.params.id), buildAuditContext(req));
     res.status(204).send();
   },
 );

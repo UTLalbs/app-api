@@ -1,6 +1,7 @@
 import type {Request, Response} from "express";
 
 import {asyncHandler} from "../../../shared/utils/asyncHandler";
+import {buildAuditContext} from "../../../shared/utils/auditContext";
 
 import {
 	listEmployees,
@@ -81,6 +82,7 @@ export const updateEmploymentStatus = asyncHandler(
 			String(req.params.id),
 			orgId,
 			req.body.employmentStatus as EmploymentStatus,
+			buildAuditContext(req),
 		);
 
 		res.json({success: true, data: updated});
@@ -92,7 +94,11 @@ export const updateEmploymentStatus = asyncHandler(
 export const getEmployeeById = asyncHandler(
 	async (req: Request, res: Response) => {
 		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
-		const employee = await getEmployee(String(req.params.id), orgId);
+		const employee = await getEmployee(
+			String(req.params.id),
+			orgId,
+			buildAuditContext(req),
+		);
 		res.json({success: true, data: employee});
 	},
 );
@@ -107,6 +113,7 @@ export const updateProfile = asyncHandler(
 			orgId,
 			req.body as unknown as Partial<EmployeeProfileDocument>, // ← cast
 			req.user!.id,
+			buildAuditContext(req),
 		);
 		res.json({success: true, data: updated.employeeProfile});
 	},
@@ -226,6 +233,7 @@ export const uploadEmployeeDocument = asyncHandler(
 				alertDays,
 			},
 			req.user!.id,
+			buildAuditContext(req),
 		);
 
 		res.status(201).json({success: true, data: doc});
@@ -272,6 +280,7 @@ export const deleteEmployeeDocument = asyncHandler(
 			orgId,
 			String(req.params.docId),
 			req.user!.id,
+			buildAuditContext(req),
 		);
 		res.status(204).send();
 	},
@@ -284,6 +293,7 @@ export const getEmployeeDocumentUrl = asyncHandler(
 			String(req.params.id),
 			orgId,
 			String(req.params.docId),
+			buildAuditContext(req),
 		);
 		res.json({success: true, data: result});
 	},

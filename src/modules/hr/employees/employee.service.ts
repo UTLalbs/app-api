@@ -10,6 +10,8 @@ import {
 	extractKeyFromUrl,
 } from "../../../infrastructure/storage/s3.service";
 import {NotFoundError, ForbiddenError} from "../../../shared/errors/AppError";
+import {emitAuditEvent} from "../../audit/audit.service";
+import type {AuditContext} from "../../audit/audit.types";
 import type {User} from "../../users/user.types";
 import {findDocumentProfileById} from "../document-profiles/document-profile.repository";
 
@@ -55,10 +57,27 @@ export async function listEmployees(
 }
 
 // ── Obtener empleado ───────────────────────────────────────────────────────
+//
+// Lectura sensible: cada acceso emite `employee_pii_read` (retención 180 días).
+// Si se llama desde un job interno (sin context), se pasa `undefined` y se omite.
 
-export async function getEmployee(id: string, orgId: string): Promise<User> {
+export async function getEmployee(
+	id: string,
+	orgId: string,
+	context?: AuditContext,
+): Promise<User> {
 	const employee = await findEmployeeById(id, orgId);
 	if (!employee) throw new NotFoundError("Employee");
+
+	if (context) {
+		await emitAuditEvent({
+			category: "reads",
+			action: "employee_pii_read",
+			target: {type: "employee", id, displayName: employee.displayName},
+			context,
+		});
+	}
+
 	return employee;
 }
 
@@ -69,6 +88,7 @@ export async function editEmployeeProfile(
 	orgId: string,
 	fields: Partial<EmployeeProfileDocument>,
 	_actorId: string,
+	context?: AuditContext,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
 	if ( !existing ) throw new NotFoundError( "Employee" );
@@ -119,6 +139,20 @@ export async function editEmployeeProfile(
 		"Employee profile updated",
 	);
 
+	// Auditoría: detectar si los cambios tocan PII → acción sensible (180d retention).
+	const PII_KEYS = new Set(["rfc", "curp", "nss", "bankAccounts"]);
+	const touchedPii = Object.keys(fields).some((k) => PII_KEYS.has(k));
+
+	if (context) {
+		await emitAuditEvent({
+			category: "employees",
+			action: touchedPii ? "employee_pii_updated" : "employee_updated",
+			target: {type: "employee", id, displayName: final.displayName},
+			metadata: {changedFields: Object.keys(fields)},
+			context,
+		});
+	}
+
 	return final;
 }
 
@@ -127,12 +161,25 @@ export async function changeEmploymentStatus(
 	id: string,
 	orgId: string,
 	status: EmploymentStatus,
+	context?: AuditContext,
 ): Promise<User> {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
 
 	const updated = await updateEmploymentStatus(id, orgId, status);
 	if (!updated) throw new NotFoundError("Employee");
+
+	const previous = existing.employeeProfile?.employmentStatus;
+
+	if (context) {
+		await emitAuditEvent({
+			category: "employees",
+			action: "employee_status_changed",
+			target: {type: "employee", id, displayName: updated.displayName},
+			diff: {employmentStatus: {old: previous, new: status}},
+			context,
+		});
+	}
 
 	return updated;
 }
@@ -227,6 +274,7 @@ export async function uploadDocument(
 		alertDays: number;
 	},
 	_actorId: string,
+	context?: AuditContext,
 ) {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
@@ -269,6 +317,21 @@ export async function uploadDocument(
 	if (!doc) throw new NotFoundError("Employee");
 
 	logger.info({employeeId: id, type: meta.type, key}, "Document uploaded");
+
+	if (context) {
+		await emitAuditEvent({
+			category: "documents",
+			action: "employee_document_uploaded",
+			target: {type: "employee", id, displayName: existing.displayName},
+			metadata: {
+				docType: meta.type,
+				docName: meta.name,
+				fileSize: upload.fileSize,
+				mimeType: upload.mimeType,
+			},
+			context,
+		});
+	}
 
 	return doc;
 }
@@ -347,6 +410,7 @@ export async function deleteDocument(
 	orgId: string,
 	docId: string,
 	_actorId: string,
+	context?: AuditContext,
 ): Promise<void> {
 	const employee = await findEmployeeById(id, orgId);
 	if (!employee) throw new NotFoundError("Employee");
@@ -374,12 +438,25 @@ export async function deleteDocument(
 	}
 
 	logger.info({employeeId: id, docId}, "Document deleted");
+
+	if (context) {
+		await emitAuditEvent({
+			category: "documents",
+			action: "employee_document_deleted",
+			target: {type: "employee", id, displayName: employee.displayName},
+			metadata: {docType: doc.type, docName: doc.name},
+			context,
+		});
+	}
 }
 
+// Emite URL presignada de S3 para un documento. Cada invocación queda auditada
+// con retención de 180 días (acceso a PII).
 export async function getDocumentUrl(
 	id: string,
 	orgId: string,
 	docId: string,
+	context?: AuditContext,
 ): Promise<{url: string; expiresAt: Date}> {
 	const employee = await findEmployeeById(id, orgId);
 	if (!employee) throw new NotFoundError("Employee");
@@ -391,7 +468,23 @@ export async function getDocumentUrl(
 	if (!doc) throw new NotFoundError("Document");
 
 	const key = extractKeyFromUrl(doc.fileUrl);
-	return getPresignedUrl(key, 3600);
+	const result = await getPresignedUrl(key, 3600);
+
+	if (context) {
+		await emitAuditEvent({
+			category: "reads",
+			action: "employee_document_url_issued",
+			target: {type: "employee", id, displayName: employee.displayName},
+			metadata: {
+				docType: doc.type,
+				docName: doc.name,
+				expiresAt: result.expiresAt,
+			},
+			context,
+		});
+	}
+
+	return result;
 }
 
 // ── Checklist ──────────────────────────────────────────────────────────────

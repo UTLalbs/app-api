@@ -41,7 +41,9 @@ export type Resource =
   | 'locations'
   | 'tax_entities'
   // Ajustes
-  | 'settings';
+  | 'settings'
+  // Auditoría
+  | 'audit';
 // ── Subdocumentos ──────────────────────────────────────────────────────────
 
 export interface Permission {

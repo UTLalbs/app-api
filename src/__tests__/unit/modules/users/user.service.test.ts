@@ -25,7 +25,24 @@ jest.mock('../../../../middleware/authorize', () => ({
 }));
 jest.mock('../../../../modules/audit/audit.service', () => ({
   createAuditEvent: jest.fn().mockResolvedValue(undefined),
+  emitAuditEvent: jest.fn().mockResolvedValue(undefined),
 }));
+
+// Contexto mínimo de auditoría para las pruebas. Los tests no verifican el
+// envío de eventos — solo que los services no rompan al recibir el context.
+const testAuditContext = {
+  actor: {
+    id: 'test-actor',
+    email: 'test@actor.com',
+    displayName: 'Test Actor',
+    userType: 'internal',
+  },
+  orgId: null,
+  ip: null,
+  userAgent: null,
+  requestId: 'test-req',
+  impersonating: null,
+};
 
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -75,7 +92,7 @@ describe('user.service', () => {
     it('retorna lista de usuarios', async () => {
       (findAllUsers as jest.Mock).mockResolvedValue([mockUser]);
 
-      const users = await listUsers(orgId);
+      const users = await listUsers({}, { orgId });
 
       expect(users).toHaveLength(1);
       expect(users[0]).toEqual(mockUser);
@@ -84,7 +101,7 @@ describe('user.service', () => {
     it('retorna lista vacía si no hay usuarios', async () => {
       (findAllUsers as jest.Mock).mockResolvedValue([]);
 
-      const users = await listUsers(orgId);
+      const users = await listUsers({}, { orgId });
 
       expect(users).toHaveLength(0);
     });
@@ -95,11 +112,14 @@ describe('user.service', () => {
       (findUserByEmail as jest.Mock).mockResolvedValue(null);
       (createUser as jest.Mock).mockResolvedValue(mockUser);
 
-      const user = await registerUser({
-        email: mockUser.email,
-        displayName: mockUser.displayName,
-        orgId,
-      });
+      const user = await registerUser(
+        {
+          email: mockUser.email,
+          displayName: mockUser.displayName,
+          orgId,
+        },
+        testAuditContext,
+      );
 
       expect(user).toEqual(mockUser);
       expect(createUser).toHaveBeenCalledTimes(1);
@@ -109,11 +129,14 @@ describe('user.service', () => {
       (findUserByEmail as jest.Mock).mockResolvedValue(mockUser);
 
       await expect(
-        registerUser({
-          email: mockUser.email,
-          displayName: mockUser.displayName,
-          orgId,
-        }),
+        registerUser(
+          {
+            email: mockUser.email,
+            displayName: mockUser.displayName,
+            orgId,
+          },
+          testAuditContext,
+        ),
       ).rejects.toThrow(ForbiddenError);
 
       expect(createUser).not.toHaveBeenCalled();

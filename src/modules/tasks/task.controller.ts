@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { ObjectId } from 'mongodb';
 
 import { asyncHandler } from '../../shared/utils/asyncHandler';
+import { buildAuditContext } from '../../shared/utils/auditContext';
 
 import {
   submitTask,
@@ -82,9 +83,9 @@ export const createTask = asyncHandler(
         description:  req.body.description,
         priority:     req.body.priority,
         area:         req.body.area,
-        createdBy:    req.user!.id,               
+        createdBy:    req.user!.id,
         assignedTo:   req.body.assignedTo ?? null,
-        assignedBy:   req.body.assignedTo           
+        assignedBy:   req.body.assignedTo
           ? req.user!.id
           : null,
         participants: req.body.participants ?? [],
@@ -96,6 +97,7 @@ export const createTask = asyncHandler(
         metadata:     req.body.metadata ?? {},
       },
       req.user!.displayName,
+      buildAuditContext(req),
     );
 
     res.status(isDuplicate ? 200 : 201).json({
@@ -129,6 +131,8 @@ export const updateTask = asyncHandler(
       },
       req.user!.id,
       req.user!.displayName,
+      req.user!.userType,
+      buildAuditContext(req),
     );
 
     res.json({ success: true, data: task });
@@ -139,7 +143,7 @@ export const updateTask = asyncHandler(
 
 export const deleteTask = asyncHandler(
   async (req: Request, res: Response) => {
-    await removeTask(String(req.params.id));
+    await removeTask(String(req.params.id), buildAuditContext(req));
     res.status(204).send();
   },
 );

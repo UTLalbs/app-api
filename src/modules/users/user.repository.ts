@@ -1,5 +1,6 @@
 import {ObjectId} from "mongodb";
 
+import {USER_STATUS, USER_TYPE} from "../../shared/constants";
 import {NotFoundError} from "../../shared/errors/AppError";
 import type {
 	EmployeeProfile,
@@ -166,7 +167,7 @@ export async function findAllUsers(
 export async function findSuperAdmins(): Promise<User[]> {
 	const docs = await getUserCollection()
 		.find(
-			{userType: "super_admin", status: "active", deletedAt: null},
+			{userType: USER_TYPE.SUPER_ADMIN, status: USER_STATUS.ACTIVE, deletedAt: null},
 			{projection: BASE_PROJECTION},
 		)
 		.toArray();
@@ -194,7 +195,7 @@ export async function createUser(dto: CreateUserDto): Promise<User> {
 		isGroup: dto.isGroup ?? false,
 		groupAlias: dto.groupAlias ?? null,
 		phones: dto.phones ?? [],
-		status: "pending",
+		status: USER_STATUS.PENDING,
 		roles,
 		employeeProfile: dto.employeeProfile
 			? (dto.employeeProfile as unknown as EmployeeProfileDocument)
@@ -366,7 +367,7 @@ export async function softDeleteUser(id: string, orgId: string): Promise<void> {
 		{
 			$set: {
 				deletedAt: new Date(),
-				status: "inactive",
+				status: USER_STATUS.INACTIVE,
 				updatedAt: new Date(),
 			},
 		},

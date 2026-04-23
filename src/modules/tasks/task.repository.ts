@@ -280,6 +280,20 @@ export async function updateTask(
 	});
 }
 
+// ── Actualizar assignedBy (set por el actor al reasignar) ──────────────────
+
+export async function updateTaskAssignedBy(
+	id: string,
+	actorId: string,
+): Promise<void> {
+	if (!ObjectId.isValid(id)) return;
+
+	await getTaskCollection().updateOne(
+		{_id: new ObjectId(id)},
+		{$set: {assignedBy: new ObjectId(actorId), updatedAt: new Date()}},
+	);
+}
+
 // ── Eliminar task ──────────────────────────────────────────────────────────
 
 export async function deleteTask(id: string): Promise<boolean> {

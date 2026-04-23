@@ -54,6 +54,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 			p("locations", ALL_ACTIONS),
 			p("tax_entities", ALL_ACTIONS),
 			p("settings", ALL_ACTIONS),
+			p("audit", ALL_ACTIONS),
 		],
 	},
 
@@ -87,6 +88,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 			p("locations", FULL_CRUD),
 			p("tax_entities", FULL_CRUD),
 			p("settings", ["read", "update"]),
+			p("audit", READ_ONLY),
 		],
 	},
 

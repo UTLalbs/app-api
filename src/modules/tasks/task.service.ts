@@ -1,6 +1,12 @@
+import {ObjectId} from "mongodb";
+
 import {env} from "../../config/env";
 import {logger} from "../../config/logger";
-import {NotFoundError} from "../../shared/errors/AppError";
+import {USER_TYPE} from "../../shared/constants";
+import {ForbiddenError, NotFoundError} from "../../shared/errors/AppError";
+import {computeDiff} from "../../shared/utils/diff";
+import {emitAuditEvent} from "../audit/audit.service";
+import type {AuditContext} from "../audit/audit.types";
 import {deleteNotificationsByTaskId} from "../notifications/notification.repository";
 import {createNotification} from "../notifications/notification.service";
 import {findSuperAdmins} from "../users/user.repository";
@@ -11,6 +17,7 @@ import {
 	findTaskById,
 	findAllTasks,
 	updateTask,
+	updateTaskAssignedBy,
 	deleteTask,
 	findTaskDocumentById,
 } from "./task.repository";
@@ -20,6 +27,14 @@ import type {
 	TaskQueryFilter,
 	UpdateTaskDto,
 } from "./task.types";
+
+const TASK_UPDATABLE_FIELDS = [
+	"status",
+	"priority",
+	"assignedTo",
+	"participants",
+	"dueDate",
+] as const satisfies readonly (keyof UpdateTaskDto)[];
 
 // ── Notificación alta prioridad ────────────────────────────────────────────
 
@@ -47,6 +62,7 @@ async function notifyHighPriority(task: Task): Promise<void> {
 export async function submitTask(
 	dto: CreateTaskDto,
 	actorName: string,
+	context: AuditContext,
 ): Promise<{task: Task; isDuplicate: boolean}> {
 	// Deduplicación por sourceId
 	if (dto.sourceId) {
@@ -62,7 +78,7 @@ export async function submitTask(
 
 	const task = await createTask(dto);
 
-	// Notificar al asignado — solo si assignedBy es diferente al createdBy
+	// Notificar al asignado
 	if (dto.assignedTo) {
 		await createNotification({
 			userId: dto.assignedTo,
@@ -100,26 +116,25 @@ export async function submitTask(
 		);
 	}
 
-	// Notificar al asignado específico (si es diferente a los super_admins)
-	if (dto.assignedTo) {
-		await createNotification({
-			userId: dto.assignedTo,
-			orgId: dto.orgId,
-			type: "assignment",
-			taskId: task.id,
-			taskTitle: task.title,
-			message: `${actorName} te asignó el task: ${task.title}`,
-			fromUserId: dto.assignedBy,
-			fromUserName: actorName,
-		});
-	}
-
 	// Notificar si es alta prioridad — fire and forget
 	if (task.priority === "critical" || task.priority === "high") {
 		notifyHighPriority(task).catch((err) =>
 			logger.error({err}, "notifyHighPriority fire-and-forget failed"),
 		);
 	}
+
+	await emitAuditEvent({
+		category: "tasks",
+		action: "task_created",
+		target: {type: "task", id: task.id, displayName: task.title},
+		metadata: {
+			type: task.type,
+			priority: task.priority,
+			area: task.area,
+			assignedTo: task.assignedTo?.id ?? null,
+		},
+		context,
+	});
 
 	return {task, isDuplicate: false};
 }
@@ -148,10 +163,26 @@ export async function editTask(
 	dto: UpdateTaskDto,
 	actorId: string,
 	actorName: string,
+	actorType: string,
+	context: AuditContext,
 ): Promise<Task> {
 	// Obtener task antes de actualizar — para comparar cambios
 	const before = await findTaskDocumentById(id);
 	if (!before) throw new NotFoundError("Task");
+
+	// Ownership: super_admin bypass, el resto debe ser creador/asignado/participante
+	if (actorType !== USER_TYPE.SUPER_ADMIN) {
+		const actor = new ObjectId(actorId);
+		const isInvolved =
+			before.createdBy.equals(actor) ||
+			before.assignedTo?.equals(actor) ||
+			before.assignedBy?.equals(actor) ||
+			before.participants.some((p) => p.equals(actor));
+
+		if (!isInvolved) {
+			throw new ForbiddenError("No tienes permiso para editar este task");
+		}
+	}
 
 	const updated = await updateTask(id, dto);
 	if (!updated) throw new NotFoundError("Task");
@@ -196,14 +227,7 @@ export async function editTask(
 		dto.assignedTo !== before.assignedTo?.toHexString();
 
 	if (assignedToChanged) {
-		// Actualizar assignedBy = actor actual en MongoDB
-		const {getTaskCollection} = await import("./task.model");
-		const {ObjectId} = await import("mongodb");
-
-		await getTaskCollection().updateOne(
-			{_id: new ObjectId(id)},
-			{$set: {assignedBy: new ObjectId(actorId), updatedAt: new Date()}},
-		);
+		await updateTaskAssignedBy(id, actorId);
 
 		if (dto.assignedTo) {
 			await createNotification({
@@ -251,12 +275,50 @@ export async function editTask(
 
 	logger.info({taskId: id, actorId}, "Task updated");
 
+	const diff = computeDiff<UpdateTaskDto>(
+		{
+			status: before.status,
+			priority: before.priority,
+			assignedTo: before.assignedTo?.toHexString() ?? null,
+			participants: before.participants.map((p) => p.toHexString()),
+			dueDate: before.dueDate ? before.dueDate.toISOString() : null,
+		},
+		{
+			status: updated.status,
+			priority: updated.priority,
+			assignedTo: updated.assignedTo?.id ?? null,
+			participants: updated.participants.map((p) => p.id),
+			dueDate: updated.dueDate ? updated.dueDate.toISOString() : null,
+		},
+		{allowedFields: TASK_UPDATABLE_FIELDS},
+	);
+
+	const auditAction =
+		dto.status === "resolved"
+			? "task_resolved"
+			: assignedToChanged
+				? "task_reassigned"
+				: "task_updated";
+
+	await emitAuditEvent({
+		category: "tasks",
+		action: auditAction,
+		target: {type: "task", id, displayName: updated.title},
+		diff: diff ?? undefined,
+		context,
+	});
+
 	return updated;
 }
 
 // ── Eliminar task ──────────────────────────────────────────────────────────
 
-export async function removeTask(id: string): Promise<void> {
+export async function removeTask(
+	id: string,
+	context: AuditContext,
+): Promise<void> {
+	const before = await findTaskDocumentById(id);
+
 	const deleted = await deleteTask(id);
 	if (!deleted) throw new NotFoundError("Task");
 
@@ -264,4 +326,13 @@ export async function removeTask(id: string): Promise<void> {
 	await deleteNotificationsByTaskId(id);
 
 	logger.info({taskId: id}, "Task and notifications deleted");
+
+	if (before) {
+		await emitAuditEvent({
+			category: "tasks",
+			action: "task_deleted",
+			target: {type: "task", id, displayName: before.title},
+			context,
+		});
+	}
 }

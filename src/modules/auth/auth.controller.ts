@@ -5,8 +5,10 @@ import jwt from "jsonwebtoken";
 
 import {logger} from "../../config/logger";
 import {getRedisClient} from "../../config/redis";
+import {USER_TYPE} from "../../shared/constants";
 import {AuthError} from "../../shared/errors/AppError";
 import {asyncHandler} from "../../shared/utils/asyncHandler";
+import {buildAuditContext} from "../../shared/utils/auditContext";
 
 import {
 	loginWithOIDC,
@@ -70,7 +72,7 @@ function getFrontendUrl(): string {
 
 function getRedirectUrl(userType: string, isNewUser: boolean): string {
 	// super_admin siempre va al panel de administración
-	if (userType === "super_admin") {
+	if (userType === USER_TYPE.SUPER_ADMIN) {
 		return `${getFrontendUrl()}/admin`;
 	}
 
@@ -122,7 +124,11 @@ export const googleCallback = asyncHandler(
 			(req.query.orgId as string | undefined) ??
 			(req.cookies?.pending_org_id as string | undefined);
 
-		const {user, tokens, isNewUser} = await loginWithOIDC(profile, orgId);
+		const {user, tokens, isNewUser} = await loginWithOIDC(
+			profile,
+			orgId,
+			buildAuditContext(req),
+		);
 
 		res
 			.cookie("access_token", tokens.accessToken, accessTokenCookieOptions)
@@ -177,7 +183,11 @@ export const microsoftCallback = asyncHandler(
 			(req.query.orgId as string | undefined) ??
 			(req.cookies?.pending_org_id as string | undefined);
 
-		const {user, tokens, isNewUser} = await loginWithOIDC(profile, orgId);
+		const {user, tokens, isNewUser} = await loginWithOIDC(
+			profile,
+			orgId,
+			buildAuditContext(req),
+		);
 
 		res
 			.cookie("access_token", tokens.accessToken, accessTokenCookieOptions)

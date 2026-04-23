@@ -1,6 +1,7 @@
 import type {Request, Response} from "express";
 
 import {asyncHandler} from "../../shared/utils/asyncHandler";
+import {buildAuditContext} from "../../shared/utils/auditContext";
 
 import {
 	getUserById,
@@ -73,36 +74,44 @@ export const getUsers = asyncHandler(
 
 export const createUser = asyncHandler(
 	async (req: Request & CreateUserInput, res: Response) => {
-		const user = await registerUser({
-			email: req.body.email,
-			displayName: req.body.displayName,
-			firstName: req.body.firstName,
-			lastName: req.body.lastName,
-			phones: req.body.phones,
-			orgId: req.user!.orgId ?? "",
-			userType: req.body.userType,
-			roles: req.body.roles,
-			clientId: req.body.clientId,
-			employeeProfile: req.body.employeeProfile,
-			clientMemberships: req.body.clientMemberships,
-		});
+		const user = await registerUser(
+			{
+				email: req.body.email,
+				displayName: req.body.displayName,
+				firstName: req.body.firstName,
+				lastName: req.body.lastName,
+				phones: req.body.phones,
+				orgId: req.user!.orgId ?? "",
+				userType: req.body.userType,
+				roles: req.body.roles,
+				clientId: req.body.clientId,
+				employeeProfile: req.body.employeeProfile,
+				clientMemberships: req.body.clientMemberships,
+			},
+			buildAuditContext(req),
+		);
 		res.status(201).json({success: true, data: user});
 	},
 );
 
 export const updateUser = asyncHandler(
 	async (req: Request & UpdateUserInput, res: Response) => {
-		const user = await editUser(String(req.params.id), req.user!.orgId ?? "", {
-			displayName: req.body.displayName,
-			firstName: req.body.firstName,
-			lastName: req.body.lastName,
-			phones: req.body.phones,
-			roles: req.body.roles,
-			clientId: req.body.clientId,
-			preferences: req.body.preferences,
-			employeeProfile: req.body.employeeProfile,
-			clientMemberships: req.body.clientMemberships,
-		});
+		const user = await editUser(
+			String(req.params.id),
+			req.user!.orgId ?? "",
+			{
+				displayName: req.body.displayName,
+				firstName: req.body.firstName,
+				lastName: req.body.lastName,
+				phones: req.body.phones,
+				roles: req.body.roles,
+				clientId: req.body.clientId,
+				preferences: req.body.preferences,
+				employeeProfile: req.body.employeeProfile,
+				clientMemberships: req.body.clientMemberships,
+			},
+			buildAuditContext(req),
+		);
 		res.json({success: true, data: user});
 	},
 );
@@ -113,13 +122,17 @@ export const updateUserStatus = asyncHandler(
 			String(req.params.id),
 			req.user!.orgId ?? "",
 			req.body.status as UserStatus,
-			req.user!.id,
+			buildAuditContext(req),
 		);
 		res.json({success: true, data: user});
 	},
 );
 
 export const deleteUser = asyncHandler(async (req: Request, res: Response) => {
-	await removeUser(String(req.params.id), req.user!.orgId ?? "", req.user!.id);
+	await removeUser(
+		String(req.params.id),
+		req.user!.orgId ?? "",
+		buildAuditContext(req),
+	);
 	res.status(204).send();
 });

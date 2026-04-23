@@ -1,6 +1,8 @@
 import {logger} from "../../config/logger";
+import {USER_STATUS} from "../../shared/constants";
 import {AuthError, ForbiddenError} from "../../shared/errors/AppError";
-import {createAuditEvent} from "../audit/audit.service";
+import {createAuditEvent, emitAuditEvent} from "../audit/audit.service";
+import type {AuditContext} from "../audit/audit.types";
 import {
 	findUserByEmail,
 	findUserByIdentity,
@@ -24,6 +26,7 @@ export interface LoginResult {
 export async function loginWithOIDC(
 	profile: OIDCProfile,
 	orgId?: string,
+	context?: AuditContext,
 ): Promise<LoginResult> {
 	// Regla 1: email debe estar verificado
 	if (!profile.emailVerified) {
@@ -99,13 +102,13 @@ export async function loginWithOIDC(
 	}
 
 	// Regla 5: cuenta deshabilitada
-	if (user.status === "inactive" || user.status === "suspended") {
+	if (user.status === USER_STATUS.INACTIVE || user.status === USER_STATUS.SUSPENDED) {
 		logger.warn({userId: user.id}, "Disabled user attempted login");
 		throw new ForbiddenError("Account is disabled");
 	}
 
 	// Regla 6: cuenta pendiente puede autenticarse
-	if (user.status === "pending") {
+	if (user.status === USER_STATUS.PENDING) {
 		logger.info({userId: user.id}, "Pending user logged in");
 	}
 
@@ -116,21 +119,47 @@ export async function loginWithOIDC(
 
 	const tokens = await issueTokenPair(user);
 
-	await createAuditEvent({
-		category: "auth",
-		action: "login_success",
-		actor: {
-			id: user.id,
-			email: user.email,
-			displayName: user.displayName,
-		},
-		orgId: user.orgId ?? undefined,
-		metadata: {
-			provider: profile.provider,
-			isNewUser,
-			userType: user.userType,
-		},
-	});
+	// Evento de login: el actor del contexto son las credenciales del request
+	// (req.user NO existe aún en el callback OIDC). Usamos el user recién
+	// autenticado como actor — él es responsable de su propio login_success.
+	if (context) {
+		await emitAuditEvent({
+			category: "auth",
+			action: "login_success",
+			metadata: {
+				provider: profile.provider,
+				isNewUser,
+				userType: user.userType,
+			},
+			context: {
+				...context,
+				actor: {
+					id: user.id,
+					email: user.email,
+					displayName: user.displayName,
+					userType: user.userType,
+				},
+				orgId: user.orgId ?? null,
+			},
+		});
+	} else {
+		// Fallback — sin req (tests, scripts). Emite con contexto mínimo sintético.
+		await createAuditEvent({
+			category: "auth",
+			action: "login_success",
+			actor: {
+				id: user.id,
+				email: user.email,
+				displayName: user.displayName,
+			},
+			orgId: user.orgId ?? undefined,
+			metadata: {
+				provider: profile.provider,
+				isNewUser,
+				userType: user.userType,
+			},
+		});
+	}
 
 	logger.info(
 		{
@@ -166,7 +195,7 @@ export async function refreshSession(
 
 	if (!user) throw new AuthError("User not found");
 
-	if (user.status === "inactive" || user.status === "suspended") {
+	if (user.status === USER_STATUS.INACTIVE || user.status === USER_STATUS.SUSPENDED) {
 		throw new ForbiddenError("Account is disabled");
 	}
 

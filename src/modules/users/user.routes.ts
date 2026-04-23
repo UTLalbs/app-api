@@ -1,7 +1,7 @@
 import { Router } from 'express';
 
 import { authenticate } from '../../middleware/authenticate';
-import{ authorize } from '../../middleware/authorize';
+import { authorize } from '../../middleware/authorize';
 import { validate } from '../../middleware/validate';
 
 import {
@@ -21,7 +21,6 @@ import {
 } from './user.validator';
 
 export const userRouter = Router();
-
 
 // Todas las rutas de users requieren autenticación
 userRouter.use(authenticate);

@@ -11,6 +11,7 @@ import {openApiDocument} from "./docs/openapi";
 import {errorHandler} from "./middleware/errorHandler";
 import {apiLimiter} from "./middleware/rateLimiter";
 import {requestId} from "./middleware/requestId";
+import {auditRouter} from "./modules/audit/audit.routes";
 import {authRouter} from "./modules/auth/auth.routes";
 import {documentCatalogRouter} from "./modules/hr/document-catalog/document-catalog.routes";
 import {documentProfileRouter} from "./modules/hr/document-profiles/document-profile.routes";
@@ -84,6 +85,7 @@ export function createApp(httpLogger: RequestHandler): express.Application {
 	app.use("/api/v1/employees", apiLimiter, employeeRouter);
 	app.use("/api/v1/hr/document-catalog", apiLimiter, documentCatalogRouter);
 	app.use("/api/v1/hr/document-profiles", apiLimiter, documentProfileRouter);
+	app.use("/api/v1/audit", apiLimiter, auditRouter);
 
 	// ── Swagger UI ─────────────────────────────────────────────────────────────
 	if (env.NODE_ENV !== "production") {

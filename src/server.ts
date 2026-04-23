@@ -6,6 +6,9 @@ import {env} from "./config/env";
 import {httpLoggerOptions} from "./config/http-logger";
 import {logger} from "./config/logger";
 import {getRedisClient, disconnectRedis} from "./config/redis";
+import {registerAuditArchiveJob} from "./infrastructure/jobs/audit-archive.job";
+import {closeAuditQueue} from "./infrastructure/jobs/audit.queue";
+import {startAuditWorker, stopAuditWorker} from "./infrastructure/jobs/audit.worker";
 import {registerEmployeeAlertsJob} from "./infrastructure/jobs/employee.alerts.job";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
@@ -45,6 +48,13 @@ async function bootstrap(): Promise<void> {
 	// Inicializar Redis
 	getRedisClient();
 
+	// Arrancar worker de auditoría — consume la cola BullMQ y escribe en Mongo
+	startAuditWorker();
+
+	// Registrar job diario que archiva audits viejos a S3 Glacier antes de que
+	// el TTL los borre. No-op si AUDIT_ARCHIVE_BUCKET no está configurado.
+	registerAuditArchiveJob();
+
 	// Crear app Express
 	const app = createApp(pinoHttp(httpLoggerOptions));
 
@@ -61,6 +71,8 @@ async function bootstrap(): Promise<void> {
 
 		server.close(async () => {
 			try {
+				await stopAuditWorker();
+				await closeAuditQueue();
 				await disconnectDatabase();
 				await disconnectRedis();
 				logger.info("Graceful shutdown complete");

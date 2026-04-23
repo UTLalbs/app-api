@@ -20,6 +20,10 @@ import {
 
 export const taskRouter = Router();
 
+// Autorización en este módulo: el acceso se controla a nivel de datos —
+// GET filtra por ownership en el controller (accessFilter), PATCH verifica
+// ownership en task.service.editTask. Solo DELETE requiere permiso RBAC
+// explícito (settings:delete) ya que es operación destructiva.
 taskRouter.use(authenticate);
 
 // GET /api/v1/tasks

@@ -7,6 +7,7 @@ import {submitTask} from "../../modules/tasks/task.service";
 import type {TaskPriority} from "../../modules/tasks/task.types";
 import {getUserCollection} from "../../modules/users/user.model";
 import type {UserDocument} from "../../modules/users/user.types";
+import {systemAuditContext} from "../../shared/utils/auditContext";
 
 // ── Config ─────────────────────────────────────────────────────────────────
 
@@ -216,6 +217,7 @@ async function processEmployee(user: UserDocument): Promise<number> {
 					},
 				},
 				SYSTEM_ACTOR_NAME,
+				systemAuditContext("employee-alerts-job"),
 			);
 
 			if (!isDuplicate) created++;

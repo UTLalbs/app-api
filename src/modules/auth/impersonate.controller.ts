@@ -3,7 +3,8 @@ import type { Request, Response } from 'express';
 import { logger } from '../../config/logger';
 import { AuthError, ForbiddenError, NotFoundError } from '../../shared/errors/AppError';
 import { asyncHandler } from '../../shared/utils/asyncHandler';
-import { createAuditEvent } from '../audit/audit.service';
+import { buildAuditContext } from '../../shared/utils/auditContext';
+import { emitAuditEvent } from '../audit/audit.service';
 import { findOrganizationById } from '../organizations/organization.repository';
 import { findUserById } from '../users/user.repository';
 
@@ -52,20 +53,14 @@ export const startImpersonation = asyncHandler(
     // Solo actualizamos el access_token — refresh_token queda igual
     res.cookie('access_token', accessToken, impersonateTokenCookieOptions);
 
-    await createAuditEvent({
+    // El contexto se construye ANTES de que el token nuevo de impersonación aplique;
+    // aquí el actor todavía es el super_admin sin impersonación vigente. La org
+    // impersonada se registra como `target`, no como `impersonating` top-level.
+    await emitAuditEvent({
       category: 'auth',
-      action: 'login_success',
-      actor: {
-        id: req.user.id,
-        email: req.user.email,
-        displayName: req.user.displayName,
-      },
-      orgId: org.id,
-      metadata: {
-        impersonating: true,
-        targetOrgId: org.id,
-        targetOrgName: org.name,
-      },
+      action: 'impersonation_start',
+      target: { type: 'organization', id: org.id, displayName: org.name },
+      context: buildAuditContext(req),
     });
 
     logger.info(
@@ -115,19 +110,18 @@ export const exitImpersonation = asyncHandler(
 
     res.cookie('access_token', accessToken, accessTokenCookieOptions);
 
-    await createAuditEvent({
+    // Al momento de emitir este evento `req.user.impersonating` todavía refleja
+    // la sesión impersonada vigente — buildAuditContext lo copia al top-level
+    // `impersonating` para que el dashboard sepa bajo qué org se ejecutó el exit.
+    await emitAuditEvent({
       category: 'auth',
-      action: 'logout',
-      actor: {
-        id: req.user.id,
-        email: req.user.email,
-        displayName: req.user.displayName,
+      action: 'impersonation_exit',
+      target: {
+        type: 'organization',
+        id: req.user.impersonating.orgId,
+        displayName: req.user.impersonating.orgName,
       },
-      metadata: {
-        impersonating: false,
-        exitedOrgId: req.user.impersonating.orgId,
-        exitedOrgName: req.user.impersonating.orgName,
-      },
+      context: buildAuditContext(req),
     });
 
     logger.info(

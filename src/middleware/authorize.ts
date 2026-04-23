@@ -5,6 +5,7 @@ import {getRedisClient} from "../config/redis";
 import {getRoleCollection} from "../modules/roles/role.model";
 import type {Action} from "../modules/roles/role.types";
 import type {UserRoleDto} from "../modules/users/user.types";
+import {USER_TYPE} from "../shared/constants";
 import {ForbiddenError} from "../shared/errors/AppError";
 
 // TTL del cache de permisos en Redis — 5 minutos
@@ -114,7 +115,7 @@ export function authorize(resource: string, action: Action): RequestHandler {
 			}
 
 			// super_admin siempre tiene acceso — sin verificar permisos
-			if (req.user.userType === "super_admin") {
+			if (req.user.userType === USER_TYPE.SUPER_ADMIN) {
 				return next();
 			}
 

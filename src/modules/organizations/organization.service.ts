@@ -8,6 +8,10 @@ import {
   CacheTTL,
 } from '../../infrastructure/cache/cache.service';
 import { NotFoundError, ConflictError } from '../../shared/errors/AppError';
+import { computeDiff } from '../../shared/utils/diff';
+import { generateSlug } from '../../shared/utils/slug';
+import { emitAuditEvent } from '../audit/audit.service';
+import type { AuditContext } from '../audit/audit.types';
 import { initDocumentCatalogForOrg } from '../hr/document-catalog/document-catalog.service';
 
 
@@ -20,6 +24,14 @@ import {
   softDeleteOrganization,
 } from './organization.repository';
 import type { CreateOrganizationDto, Organization, UpdateOrganizationDto } from './organization.types';
+
+const ORG_UPDATABLE_FIELDS = [
+  'name',
+  'status',
+  'settings',
+  'fiscalData',
+  'contacts',
+] as const satisfies readonly (keyof UpdateOrganizationDto)[];
 
 
 // ── Helper timezone ────────────────────────────────────────────────────────
@@ -40,18 +52,6 @@ export async function getOrgTimezone(orgId: string): Promise<string> {
   return timezone;
 }
 
-// ── Utilidad — genera slug a partir del nombre ─────────────────────────────
-// "Unidos Transport" → "unidos-transport"
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .trim()
-    .normalize('NFD')                    // descompone caracteres acentuados
-    .replace(/[\u0300-\u036f]/g, '')     // elimina los diacríticos (tildes)
-    .replace(/[^a-z0-9\s-]/g, '')        // elimina caracteres especiales
-    .replace(/\s+/g, '-')               // espacios → guiones
-    .replace(/-+/g, '-');               // múltiples guiones → uno solo
-}
 
 // ── Consultas ──────────────────────────────────────────────────────────────
 
@@ -78,6 +78,7 @@ export async function listOrganizations(): Promise<Organization[]> {
 export async function registerOrganization(
   dto: CreateOrganizationDto,
   actorId: string,
+  context: AuditContext,
 ): Promise<Organization> {
   const slug = dto.slug ?? generateSlug(dto.name);
 
@@ -95,12 +96,21 @@ export async function registerOrganization(
 
   logger.info({ orgId: org.id, slug }, 'Organization registered');
 
+  await emitAuditEvent({
+    category: 'organizations',
+    action: 'org_created',
+    target: { type: 'organization', id: org.id, displayName: org.name },
+    metadata: { slug: org.slug },
+    context,
+  });
+
   return org;
 }
 
 export async function editOrganization(
   id: string,
   dto: UpdateOrganizationDto,
+  context: AuditContext,
 ): Promise<Organization> {
   const existing = await findOrganizationById(id);
   if (!existing) throw new NotFoundError('Organization');
@@ -116,10 +126,27 @@ export async function editOrganization(
 
   logger.info({ orgId: id }, 'Organization updated');
 
+  const diff = computeDiff<UpdateOrganizationDto>(
+    existing as unknown as Partial<UpdateOrganizationDto>,
+    updated as unknown as Partial<UpdateOrganizationDto>,
+    { allowedFields: ORG_UPDATABLE_FIELDS },
+  );
+
+  await emitAuditEvent({
+    category: 'organizations',
+    action: 'org_updated',
+    target: { type: 'organization', id, displayName: updated.name },
+    diff: diff ?? undefined,
+    context,
+  });
+
   return updated;
 }
 
-export async function removeOrganization(id: string): Promise<void> {
+export async function removeOrganization(
+  id: string,
+  context: AuditContext,
+): Promise<void> {
   const existing = await findOrganizationById(id);
   if (!existing) throw new NotFoundError('Organization');
 
@@ -131,4 +158,11 @@ export async function removeOrganization(id: string): Promise<void> {
   ]);
 
   logger.info({ orgId: id }, 'Organization removed');
+
+  await emitAuditEvent({
+    category: 'organizations',
+    action: 'org_deleted',
+    target: { type: 'organization', id, displayName: existing.name },
+    context,
+  });
 }

@@ -7,6 +7,9 @@ import {
 } from "../../infrastructure/cache/cache.service";
 import {invalidatePermissionsCache} from "../../middleware/authorize";
 import {NotFoundError, ForbiddenError} from "../../shared/errors/AppError";
+import {computeDiff} from "../../shared/utils/diff";
+import {emitAuditEvent} from "../audit/audit.service";
+import type {AuditContext} from "../audit/audit.types";
 
 
 import {
@@ -24,6 +27,22 @@ import type {
   UserStatus,
   UserQueryFilter
 } from "./user.types";
+
+// Campos del UpdateUserDto que se permite comparar en el diff (excluye audit ruido).
+const USER_UPDATABLE_FIELDS = [
+  'displayName',
+  'firstName',
+  'lastName',
+  'isGroup',
+  'groupAlias',
+  'phones',
+  'status',
+  'roles',
+  'clientId',
+  'preferences',
+  'employeeProfile',
+  'clientMemberships',
+] as const satisfies readonly (keyof UpdateUserDto)[];
 
 // ── Consultas ──────────────────────────────────────────────────────────────
 
@@ -64,7 +83,10 @@ export async function listUsers(
 
 // ── Creación ───────────────────────────────────────────────────────────────
 
-export async function registerUser(dto: CreateUserDto): Promise<User> {
+export async function registerUser(
+  dto: CreateUserDto,
+  context: AuditContext,
+): Promise<User> {
   const existing = await findUserByEmail(dto.email);
 
   if (existing) {
@@ -78,6 +100,14 @@ export async function registerUser(dto: CreateUserDto): Promise<User> {
 
   logger.info({ userId: user.id, orgId: dto.orgId }, 'User registered');
 
+  await emitAuditEvent({
+    category: 'users',
+    action: 'user_created',
+    target: { type: 'user', id: user.id, displayName: user.displayName },
+    metadata: { email: user.email, userType: user.userType },
+    context,
+  });
+
   return user;
 }
 
@@ -87,6 +117,7 @@ export async function editUser(
   id: string,
   orgId: string,
   dto: UpdateUserDto,
+  context: AuditContext,
 ): Promise<User> {
   const existing = await findUserById(id, orgId);
   if (!existing) throw new NotFoundError('User');
@@ -102,6 +133,20 @@ export async function editUser(
 
   logger.info({ userId: id }, 'User updated');
 
+  const diff = computeDiff<UpdateUserDto>(
+    existing as unknown as Partial<UpdateUserDto>,
+    updated as unknown as Partial<UpdateUserDto>,
+    { allowedFields: USER_UPDATABLE_FIELDS },
+  );
+
+  await emitAuditEvent({
+    category: 'users',
+    action: dto.roles ? 'user_role_assigned' : 'user_updated',
+    target: { type: 'user', id, displayName: updated.displayName },
+    diff: diff ?? undefined,
+    context,
+  });
+
   return updated;
 }
 
@@ -109,9 +154,10 @@ export async function changeUserStatus(
   id: string,
   orgId: string,
   status: UserStatus,
-  actorId: string,
+  context: AuditContext,
 ): Promise<User> {
-  if (id === actorId) {
+  const actorId = context.actor?.id;
+  if (actorId && id === actorId) {
     throw new ForbiddenError('Cannot change your own account status');
   }
 
@@ -128,6 +174,14 @@ export async function changeUserStatus(
 
   logger.info({ userId: id, status, actorId }, 'User status changed');
 
+  await emitAuditEvent({
+    category: 'users',
+    action: 'user_status_changed',
+    target: { type: 'user', id, displayName: updated.displayName },
+    diff: { status: { old: existing.status, new: status } },
+    context,
+  });
+
   return updated;
 }
 
@@ -136,9 +190,10 @@ export async function changeUserStatus(
 export async function removeUser(
   id: string,
   orgId: string,
-  actorId: string,
+  context: AuditContext,
 ): Promise<void> {
-  if (id === actorId) {
+  const actorId = context.actor?.id;
+  if (actorId && id === actorId) {
     throw new ForbiddenError('Cannot delete your own account');
   }
 
@@ -154,4 +209,11 @@ export async function removeUser(
   ]);
 
   logger.info({ userId: id, actorId }, 'User removed');
+
+  await emitAuditEvent({
+    category: 'users',
+    action: 'user_deleted',
+    target: { type: 'user', id, displayName: existing.displayName },
+    context,
+  });
 }
