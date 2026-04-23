@@ -244,14 +244,18 @@ export async function editX(id, dto, context) {
 - `organizations`: create/update/delete.
 - `roles`: create/update/delete/permissions_changed.
 - `tasks`: create/update/reassigned/resolved/deleted.
-- `employees`: PII read, pii updated, status changed, document uploaded/deleted, document URL issued.
-- `auth`: login_success, logout, token_refreshed, impersonation_start/exit.
+- `employees`:
+  - lectura sensible (`employee_pii_read`, `employee_document_url_issued`),
+  - perfil (`employee_updated` / `employee_pii_updated` con diff real + enmascaramiento),
+  - estatus (`employee_status_changed`),
+  - contactos de emergencia add/edit/delete (`employee_updated` + metadata.operation),
+  - cuentas bancarias add/edit/delete (`employee_pii_updated` + metadata.operation),
+  - documentos upload/update/delete (`employee_document_uploaded` / `employee_document_updated` / `employee_document_deleted`).
+- `auth`: login_success, logout, logout_all, token_refreshed, impersonation_start/exit.
 
 ### Servicios con integración pendiente
 
 Pueden seguir el mismo patrón cuando se necesite:
-- `employees` — contactos de emergencia, cuentas bancarias (bankAccounts emite en updateProfile,
-  pero las operaciones granulares contact/account aún no).
 - `hr/document-catalog`, `hr/document-profiles`.
 - `notifications` — no se audita por diseño (ruido).
 
@@ -260,9 +264,22 @@ Pueden seguir el mismo patrón cuando se necesite:
 - `AUDIT_ARCHIVE_BUCKET` (opcional) — bucket S3 de cold storage. Sin esto, el job de
   archivo se registra pero queda no-op.
 
-## Lecturas sensibles auditadas
+## Lecturas auditadas
 
-| Endpoint | Action | Retención |
-|---|---|---|
-| `GET /api/v1/employees/:id` | `employee_pii_read` | 180d |
-| `GET /api/v1/employees/:id/documents/:docId/url` | `employee_document_url_issued` | 180d |
+| Endpoint | Action | Retención | Condición |
+|---|---|---|---|
+| `GET /api/v1/employees/:id` | `employee_pii_read` | 180d | Siempre |
+| `GET /api/v1/employees/:id/documents/:docId/url` | `employee_document_url_issued` | 180d | Siempre |
+| `GET /api/v1/users/:id` | `user_read` | 7d | Solo si `actor.id !== target.id` (self-reads no se auditan) |
+
+## Metadata convencional en eventos de empleado
+
+Cuando la acción es genérica (`employee_updated` o `employee_pii_updated`) pero
+el cambio afecta una sub-colección del perfil, el service añade
+`metadata.operation` para que el dashboard pueda distinguirlos sin parsear el
+`diff`. Valores usados hoy:
+
+| operation | Action |
+|---|---|
+| `emergency_contact_added` / `_updated` / `_deleted` | `employee_updated` (7d) |
+| `bank_account_added` / `_updated` / `_deleted` | `employee_pii_updated` (180d) |

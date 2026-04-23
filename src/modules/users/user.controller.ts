@@ -4,7 +4,7 @@ import {asyncHandler} from "../../shared/utils/asyncHandler";
 import {buildAuditContext} from "../../shared/utils/auditContext";
 
 import {
-	getUserById,
+	readUserDetail,
 	listUsers,
 	registerUser,
 	editUser,
@@ -20,7 +20,11 @@ import type {
 } from "./user.validator";
 
 export const getUser = asyncHandler(async (req: Request, res: Response) => {
-	const user = await getUserById(String(req.params.id), req.user!.orgId ?? "");
+	const user = await readUserDetail(
+		String(req.params.id),
+		req.user!.orgId ?? "",
+		buildAuditContext(req),
+	);
 	res.json({success: true, data: user});
 });
 

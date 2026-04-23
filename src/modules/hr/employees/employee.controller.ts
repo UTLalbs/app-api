@@ -124,12 +124,17 @@ export const updateProfile = asyncHandler(
 export const createEmergencyContact = asyncHandler(
 	async (req: Request & CreateEmergencyContactInput, res: Response) => {
 		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
-		const updated = await addContact(String(req.params.id), orgId, {
-			name: req.body.name,
-			relationship: req.body.relationship,
-			phone: req.body.phone,
-			phoneCode: req.body.phoneCode ?? "+52",
-		});
+		const updated = await addContact(
+			String(req.params.id),
+			orgId,
+			{
+				name: req.body.name,
+				relationship: req.body.relationship,
+				phone: req.body.phone,
+				phoneCode: req.body.phoneCode ?? "+52",
+			},
+			buildAuditContext(req),
+		);
 		res.status(201).json({
 			success: true,
 			data: updated.employeeProfile?.emergencyContacts,
@@ -145,6 +150,7 @@ export const updateEmergencyContact = asyncHandler(
 			orgId,
 			String(req.params.contactId),
 			req.body,
+			buildAuditContext(req),
 		);
 		res.json({success: true, data: updated.employeeProfile?.emergencyContacts});
 	},
@@ -157,6 +163,7 @@ export const deleteEmergencyContact = asyncHandler(
 			String(req.params.id),
 			orgId,
 			String(req.params.contactId),
+			buildAuditContext(req),
 		);
 		res.status(204).send();
 	},
@@ -167,13 +174,18 @@ export const deleteEmergencyContact = asyncHandler(
 export const createBankAccount = asyncHandler(
 	async (req: Request & CreateBankAccountInput, res: Response) => {
 		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
-		const account = await addAccount(String(req.params.id), orgId, {
-			bankName: req.body.bankName,
-			accountNumber: req.body.accountNumber,
-			clabe: req.body.clabe,
-			isDefault: req.body.isDefault ?? false,
-			documentUrl: req.body.documentUrl ?? null,
-		});
+		const account = await addAccount(
+			String(req.params.id),
+			orgId,
+			{
+				bankName: req.body.bankName,
+				accountNumber: req.body.accountNumber,
+				clabe: req.body.clabe,
+				isDefault: req.body.isDefault ?? false,
+				documentUrl: req.body.documentUrl ?? null,
+			},
+			buildAuditContext(req),
+		);
 		res.status(201).json({success: true, data: account});
 	},
 );
@@ -186,6 +198,7 @@ export const updateBankAccount = asyncHandler(
 			orgId,
 			String(req.params.accountId),
 			req.body,
+			buildAuditContext(req),
 		);
 		res.json({success: true, data: updated.employeeProfile?.bankAccounts});
 	},
@@ -198,6 +211,7 @@ export const deleteBankAccount = asyncHandler(
 			String(req.params.id),
 			orgId,
 			String(req.params.accountId),
+			buildAuditContext(req),
 		);
 		res.status(204).send();
 	},
@@ -267,6 +281,7 @@ export const updateEmployeeDocument = asyncHandler(
 				verifiedBy: req.body.verifiedBy,
 			},
 			req.user!.id,
+			buildAuditContext(req),
 		);
 		res.json({success: true, data: updated.employeeProfile?.documents});
 	},

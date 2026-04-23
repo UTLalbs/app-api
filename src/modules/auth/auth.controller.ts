@@ -9,6 +9,8 @@ import {USER_TYPE} from "../../shared/constants";
 import {AuthError} from "../../shared/errors/AppError";
 import {asyncHandler} from "../../shared/utils/asyncHandler";
 import {buildAuditContext} from "../../shared/utils/auditContext";
+import type {AuditContext} from "../audit/audit.types";
+import {findUserById} from "../users/user.repository";
 
 import {
 	loginWithOIDC,
@@ -242,14 +244,54 @@ export const refresh = asyncHandler(async (req: Request, res: Response) => {
 
 export const logoutHandler = asyncHandler(
 	async (req: Request, res: Response) => {
+		// La ruta /logout no pasa por `authenticate`, así que `req.user` es undefined.
+		// Resolvemos la identidad del actor desde los tokens disponibles (refresh
+		// verificado si vale, o access decodificado aunque esté expirado) y poblamos
+		// el contexto de auditoría manualmente con un findUserById.
+
 		const refreshToken = req.cookies?.refresh_token as string | undefined;
+		const accessToken = req.cookies?.access_token as string | undefined;
+
+		let userId: string | undefined;
+		let jti: string | null = null;
 
 		if (refreshToken) {
 			try {
 				const payload = await verifyRefreshToken(refreshToken);
-				await logout(payload.sub, payload.jti);
+				userId = payload.sub;
+				jti = payload.jti;
 			} catch {
-				// token ya expirado — igual limpiamos cookies
+				// refresh token ya revocado o expirado — caemos al access
+			}
+		}
+
+		if (!userId && accessToken) {
+			const decoded = jwt.decode(accessToken) as AccessTokenPayload | null;
+			if (decoded?.sub) userId = decoded.sub;
+		}
+
+		if (userId) {
+			const baseContext = buildAuditContext(req);
+			let context: AuditContext = baseContext;
+
+			if (!context.actor) {
+				const user = await findUserById(userId, "");
+				if (user) {
+					context = {
+						...baseContext,
+						actor: {
+							id: user.id,
+							email: user.email,
+							displayName: user.displayName,
+							userType: user.userType,
+						},
+						orgId: user.orgId ?? baseContext.orgId,
+					};
+				}
+			}
+
+			if (context.actor) {
+				await logout(userId, jti, context);
 			}
 		}
 
@@ -263,7 +305,7 @@ export const logoutHandler = asyncHandler(
 export const logoutAll = asyncHandler(async (req: Request, res: Response) => {
 	if (!req.user) throw new AuthError("Not authenticated");
 
-	await logoutAllDevices(req.user.id);
+	await logoutAllDevices(req.user.id, buildAuditContext(req));
 
 	res
 		.clearCookie("access_token")

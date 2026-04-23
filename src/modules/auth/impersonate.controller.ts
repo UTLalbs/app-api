@@ -53,14 +53,20 @@ export const startImpersonation = asyncHandler(
     // Solo actualizamos el access_token — refresh_token queda igual
     res.cookie('access_token', accessToken, impersonateTokenCookieOptions);
 
-    // El contexto se construye ANTES de que el token nuevo de impersonación aplique;
-    // aquí el actor todavía es el super_admin sin impersonación vigente. La org
-    // impersonada se registra como `target`, no como `impersonating` top-level.
+    // Enriquecemos el contexto con la org destino — aunque el token nuevo todavía
+    // no aplica en esta request, marcamos el evento como parte de la sesión
+    // impersonada para que el dashboard pueda agrupar start → acciones → exit
+    // filtrando por `impersonating.orgId`.
+    const baseContext = buildAuditContext(req);
     await emitAuditEvent({
       category: 'auth',
       action: 'impersonation_start',
       target: { type: 'organization', id: org.id, displayName: org.name },
-      context: buildAuditContext(req),
+      context: {
+        ...baseContext,
+        orgId: org.id,
+        impersonating: { orgId: org.id, orgName: org.name },
+      },
     });
 
     logger.info(

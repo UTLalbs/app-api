@@ -58,6 +58,28 @@ export async function getUserById(id: string, orgId: string): Promise<User> {
   return user;
 }
 
+// Lectura desde un handler HTTP — emite `user_read` cuando el actor no es el
+// propio usuario consultado (evitamos ensuciar el log con self-reads del "me"
+// o del refresh de perfil del propio actor).
+export async function readUserDetail(
+  id: string,
+  orgId: string,
+  context: AuditContext,
+): Promise<User> {
+  const user = await getUserById(id, orgId);
+
+  if (context.actor && context.actor.id !== id) {
+    await emitAuditEvent({
+      category: 'users',
+      action: 'user_read',
+      target: { type: 'user', id, displayName: user.displayName },
+      context,
+    });
+  }
+
+  return user;
+}
+
 export async function getUserByEmail(email: string): Promise<User | null> {
   return findUserByEmail(email);
 }

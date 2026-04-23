@@ -28,6 +28,7 @@ export type AuditAction =
   | 'user_deleted'
   | 'user_status_changed'
   | 'user_role_assigned'
+  | 'user_read'
   // roles
   | 'role_created'
   | 'role_updated'
@@ -57,6 +58,7 @@ export type AuditAction =
   | 'doc_profile_updated'
   | 'doc_profile_deleted'
   | 'employee_document_uploaded'
+  | 'employee_document_updated'
   | 'employee_document_deleted'
   // reads (sensibles)
   | 'employee_pii_read'
@@ -95,6 +97,7 @@ export const SENSITIVE_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>(
   'employee_pii_read',
   'employee_document_url_issued',
   'employee_document_uploaded',
+  'employee_document_updated',
   'employee_document_deleted',
 ]);
 

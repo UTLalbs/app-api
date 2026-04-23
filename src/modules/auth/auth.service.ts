@@ -211,31 +211,43 @@ export async function refreshSession(
 }
 
 // ── Logout ─────────────────────────────────────────────────────────────────
+//
+// `jti` puede ser null cuando el refresh token ya expiró/revocó pero el usuario
+// aún está cerrando sesión desde la app — el evento igual se emite para dejar
+// traza de la intención. La revocación del refresh solo ocurre si hay jti válido.
 
-export async function logout(userId: string, jti: string): Promise<void> {
-	const {revokeRefreshToken} = await import("./token.service");
+export async function logout(
+	userId: string,
+	jti: string | null,
+	context: AuditContext,
+): Promise<void> {
+	if (jti) {
+		const {revokeRefreshToken} = await import("./token.service");
+		await revokeRefreshToken(userId, jti);
+	}
 
-	await revokeRefreshToken(userId, jti);
-
-	await createAuditEvent({
+	await emitAuditEvent({
 		category: "auth",
 		action: "logout",
-		actor: {id: userId, email: "", displayName: ""},
-		metadata: {jti},
+		metadata: jti ? {jti} : undefined,
+		context,
 	});
 
 	logger.info({userId}, "User logged out");
 }
 
-export async function logoutAllDevices(userId: string): Promise<void> {
+export async function logoutAllDevices(
+	userId: string,
+	context: AuditContext,
+): Promise<void> {
 	const {revokeAllUserTokens} = await import("./token.service");
 
 	await revokeAllUserTokens(userId);
 
-	await createAuditEvent({
+	await emitAuditEvent({
 		category: "auth",
 		action: "logout_all",
-		actor: {id: userId, email: "", displayName: ""},
+		context,
 	});
 
 	logger.info({userId}, "User logged out from all devices");

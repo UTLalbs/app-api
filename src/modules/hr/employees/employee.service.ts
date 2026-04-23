@@ -10,6 +10,7 @@ import {
 	extractKeyFromUrl,
 } from "../../../infrastructure/storage/s3.service";
 import {NotFoundError, ForbiddenError} from "../../../shared/errors/AppError";
+import {computeDiff} from "../../../shared/utils/diff";
 import {emitAuditEvent} from "../../audit/audit.service";
 import type {AuditContext} from "../../audit/audit.types";
 import type {User} from "../../users/user.types";
@@ -36,10 +37,12 @@ import {
 	updateEmploymentStatus,
 } from "./employee.repository";
 import type {
+	BankAccount,
 	ChecklistStatus,
 	DocumentStatus,
 	DocumentType,
 	EmergencyContact,
+	EmployeeDocument,
 	EmployeeProfileDocument,
 	EmployeeQueryFilter,
 	EmploymentStatus,
@@ -96,6 +99,24 @@ export async function editEmployeeProfile(
 	// Inicializar arrays faltantes
 	await initEmployeeArrays(id, orgId);
 
+	// Normalización de metadata del RFC:
+	// `rfcValidatedAt` y `rfcValidatedStatus` sólo pueden cambiar cuando el valor
+	// del RFC cambia. El frontend puede estar re-enviándolos en cada submit
+	// (por haber disparado la validación al abrir el form); los descartamos si
+	// el RFC no viene, o si viene igual al guardado. Así evitamos revalidar y
+	// ensuciar el diff / audit log en cada guardado.
+	const currentRfc = existing.employeeProfile?.rfc ?? null;
+	const rfcChanged =
+		fields.rfc !== undefined && fields.rfc !== currentRfc;
+	if (!rfcChanged) {
+		if ("rfcValidatedAt" in fields) delete fields.rfcValidatedAt;
+		if ("rfcValidatedStatus" in fields) delete fields.rfcValidatedStatus;
+		if (fields.rfc !== undefined && fields.rfc === currentRfc) {
+			// rfc idéntico → también lo sacamos para no dejarlo en changedFields.
+			delete fields.rfc;
+		}
+	}
+
 	// Si viene employmentStatus → sincronizar User.status y deletedAt
 	if (fields.employmentStatus) {
 		await updateEmploymentStatus(id, orgId, fields.employmentStatus);
@@ -139,18 +160,32 @@ export async function editEmployeeProfile(
 		"Employee profile updated",
 	);
 
-	// Auditoría: detectar si los cambios tocan PII → acción sensible (180d retention).
-	const PII_KEYS = new Set(["rfc", "curp", "nss", "bankAccounts"]);
-	const touchedPii = Object.keys(fields).some((k) => PII_KEYS.has(k));
-
+	// Auditoría: computar diff real (before vs after, solo campos del DTO).
+	// computeDiff enmascara PII (rfc/curp/nss/clabe/…) y filtra campos sin cambio —
+	// si el frontend mandó el formulario completo, solo queda lo que realmente cambió.
 	if (context) {
-		await emitAuditEvent({
-			category: "employees",
-			action: touchedPii ? "employee_pii_updated" : "employee_updated",
-			target: {type: "employee", id, displayName: final.displayName},
-			metadata: {changedFields: Object.keys(fields)},
-			context,
-		});
+		const diff = computeDiff(
+			existing.employeeProfile ?? {},
+			final.employeeProfile ?? {},
+			{
+				allowedFields: Object.keys(
+					fields,
+				) as (keyof EmployeeProfileDocument)[],
+			},
+		);
+
+		if (diff) {
+			const touchedPii = Object.values(diff).some(
+				(entry) => entry.isMasked === true,
+			);
+			await emitAuditEvent({
+				category: "employees",
+				action: touchedPii ? "employee_pii_updated" : "employee_updated",
+				target: {type: "employee", id, displayName: final.displayName},
+				diff,
+				context,
+			});
+		}
 	}
 
 	return final;
@@ -190,9 +225,25 @@ export async function addContact(
 	id: string,
 	orgId: string,
 	data: Omit<EmergencyContact, "_id">,
+	context?: AuditContext,
 ): Promise<User> {
 	const updated = await addEmergencyContact(id, orgId, data);
 	if (!updated) throw new NotFoundError("Employee");
+
+	if (context) {
+		await emitAuditEvent({
+			category: "employees",
+			action: "employee_updated",
+			target: {type: "employee", id, displayName: updated.displayName},
+			metadata: {
+				operation: "emergency_contact_added",
+				contactName: data.name,
+				relationship: data.relationship,
+			},
+			context,
+		});
+	}
+
 	return updated;
 }
 
@@ -201,9 +252,37 @@ export async function editContact(
 	orgId: string,
 	contactId: string,
 	data: Partial<Omit<EmergencyContact, "_id">>,
+	context?: AuditContext,
 ): Promise<User> {
+	const existing = await findEmployeeById(id, orgId);
+	const before = existing?.employeeProfile?.emergencyContacts?.find(
+		(c) => c._id.toString() === contactId,
+	);
+
 	const updated = await updateEmergencyContact(id, orgId, contactId, data);
 	if (!updated) throw new NotFoundError("EmergencyContact");
+
+	if (context && before) {
+		const after = updated.employeeProfile?.emergencyContacts?.find(
+			(c) => c._id.toString() === contactId,
+		);
+		if (after) {
+			const diff = computeDiff(before, after, {
+				allowedFields: Object.keys(data) as (keyof EmergencyContact)[],
+			});
+			if (diff) {
+				await emitAuditEvent({
+					category: "employees",
+					action: "employee_updated",
+					target: {type: "employee", id, displayName: updated.displayName},
+					diff,
+					metadata: {operation: "emergency_contact_updated", contactId},
+					context,
+				});
+			}
+		}
+	}
+
 	return updated;
 }
 
@@ -211,9 +290,29 @@ export async function deleteContact(
 	id: string,
 	orgId: string,
 	contactId: string,
+	context?: AuditContext,
 ): Promise<void> {
+	const existing = await findEmployeeById(id, orgId);
+	const contact = existing?.employeeProfile?.emergencyContacts?.find(
+		(c) => c._id.toString() === contactId,
+	);
+
 	const deleted = await removeEmergencyContact(id, orgId, contactId);
 	if (!deleted) throw new NotFoundError("EmergencyContact");
+
+	if (context && existing && contact) {
+		await emitAuditEvent({
+			category: "employees",
+			action: "employee_updated",
+			target: {type: "employee", id, displayName: existing.displayName},
+			metadata: {
+				operation: "emergency_contact_deleted",
+				contactName: contact.name,
+				relationship: contact.relationship,
+			},
+			context,
+		});
+	}
 }
 
 // ── Bank Accounts ──────────────────────────────────────────────────────────
@@ -228,6 +327,7 @@ export async function addAccount(
 		isDefault: boolean;
 		documentUrl: string | null;
 	},
+	context?: AuditContext,
 ) {
 	const existing = await findEmployeeById(id, orgId);
 	if (!existing) throw new NotFoundError("Employee");
@@ -237,6 +337,20 @@ export async function addAccount(
 
 	logger.info({employeeId: id, bankName: data.bankName}, "Bank account added");
 
+	if (context) {
+		await emitAuditEvent({
+			category: "employees",
+			action: "employee_pii_updated",
+			target: {type: "employee", id, displayName: existing.displayName},
+			metadata: {
+				operation: "bank_account_added",
+				bankName: data.bankName,
+				isDefault: data.isDefault,
+			},
+			context,
+		});
+	}
+
 	return account;
 }
 
@@ -245,9 +359,37 @@ export async function editAccount(
 	orgId: string,
 	accountId: string,
 	data: {bankName?: string; isDefault?: boolean; documentUrl?: string | null},
+	context?: AuditContext,
 ): Promise<User> {
+	const existing = await findEmployeeById(id, orgId);
+	const before = existing?.employeeProfile?.bankAccounts?.find(
+		(a) => a._id.toString() === accountId,
+	);
+
 	const updated = await updateBankAccount(id, orgId, accountId, data);
 	if (!updated) throw new NotFoundError("BankAccount");
+
+	if (context && before) {
+		const after = updated.employeeProfile?.bankAccounts?.find(
+			(a) => a._id.toString() === accountId,
+		);
+		if (after) {
+			const diff = computeDiff(before, after, {
+				allowedFields: Object.keys(data) as (keyof BankAccount)[],
+			});
+			if (diff) {
+				await emitAuditEvent({
+					category: "employees",
+					action: "employee_pii_updated",
+					target: {type: "employee", id, displayName: updated.displayName},
+					diff,
+					metadata: {operation: "bank_account_updated", accountId},
+					context,
+				});
+			}
+		}
+	}
+
 	return updated;
 }
 
@@ -255,9 +397,29 @@ export async function deleteAccount(
 	id: string,
 	orgId: string,
 	accountId: string,
+	context?: AuditContext,
 ): Promise<void> {
+	const existing = await findEmployeeById(id, orgId);
+	const account = existing?.employeeProfile?.bankAccounts?.find(
+		(a) => a._id.toString() === accountId,
+	);
+
 	const deleted = await removeBankAccount(id, orgId, accountId);
 	if (!deleted) throw new NotFoundError("BankAccount");
+
+	if (context && existing && account) {
+		await emitAuditEvent({
+			category: "employees",
+			action: "employee_pii_updated",
+			target: {type: "employee", id, displayName: existing.displayName},
+			metadata: {
+				operation: "bank_account_deleted",
+				bankName: account.bankName,
+				lastFour: account.lastFour,
+			},
+			context,
+		});
+	}
 }
 
 // ── Documents ──────────────────────────────────────────────────────────────
@@ -354,7 +516,13 @@ export async function editDocument(
 		verifiedBy?: string | null;
 	},
 	_actorId: string,
+	context?: AuditContext,
 ): Promise<User> {
+	const existingBefore = await findEmployeeById(id, orgId);
+	const docBefore = existingBefore?.employeeProfile?.documents?.find(
+		(d) => d._id.toString() === docId,
+	);
+
 	const verifiedBy = fields.verifiedBy
 		? new ObjectId(fields.verifiedBy)
 		: fields.verifiedBy === null
@@ -398,6 +566,32 @@ export async function editDocument(
 						documentId: null,
 					});
 				}
+			}
+		}
+	}
+
+	// Auditoría: diff sobre los campos del DTO (status, notes, fechas, renovación…).
+	if (context && docBefore) {
+		const docAfter = updated.employeeProfile?.documents?.find(
+			(d) => d._id.toString() === docId,
+		);
+		if (docAfter) {
+			const diff = computeDiff(docBefore, docAfter, {
+				allowedFields: Object.keys(fields) as (keyof EmployeeDocument)[],
+			});
+			if (diff) {
+				await emitAuditEvent({
+					category: "documents",
+					action: "employee_document_updated",
+					target: {type: "employee", id, displayName: updated.displayName},
+					diff,
+					metadata: {
+						docId,
+						docType: docBefore.type,
+						docName: docBefore.name,
+					},
+					context,
+				});
 			}
 		}
 	}
