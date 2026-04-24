@@ -14,7 +14,9 @@ export interface OrganizationSettings {
 		fuel: boolean;
 		maintenance: boolean;
 		administration: boolean;
+		humanResources: boolean;
 		payroll: boolean;
+		catalogs: boolean;
 	};
 }
 

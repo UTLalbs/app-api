@@ -31,6 +31,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Dueño del SaaS — acceso total a todos los tenants",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("control_board", ALL_ACTIONS),
@@ -65,6 +66,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 			"Administrador del tenant — acceso total dentro de su organización",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("control_board", READ_ONLY),
@@ -98,6 +100,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Coordinador de viajes — gestión de servicios y tablero",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("control_board", READ_ONLY),
@@ -117,6 +120,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Operador / Chofer — sus servicios desde app móvil",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("services", ["read", "update"]),
@@ -130,6 +134,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Mecánico — mantenimiento, inventario y unidades",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("maintenance", READ_ONLY),
@@ -148,6 +153,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Contador — facturación, facturas y reportes",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("billing", READ_WRITE),
@@ -165,6 +171,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Recursos Humanos — empleados, nóminas y períodos",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("payroll", READ_ONLY),
@@ -181,6 +188,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Gerente — solo lectura de reportes y KPIs",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("control_board", READ_ONLY),
@@ -205,6 +213,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 			"Jefe de Combustible — inventario y programación de combustible",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("fuel", READ_ONLY),
@@ -222,6 +231,7 @@ const SYSTEM_ROLES: Omit<RoleDocument, "_id" | "createdAt" | "updatedAt">[] = [
 		description: "Contacto cliente — portal externo, solo sus datos",
 		orgId: null,
 		isSystem: true,
+		isOrgAdmin: false,
 		isActive: true,
 		permissions: [
 			p("services", READ_ONLY),

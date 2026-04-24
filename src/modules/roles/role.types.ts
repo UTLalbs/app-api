@@ -59,6 +59,7 @@ export interface RoleDocument {
   name: string;
   description: string;
   isSystem: boolean;
+  isOrgAdmin: boolean;
   isActive: boolean;
   permissions: Permission[];
   createdAt: Date;
@@ -73,6 +74,7 @@ export interface Role {
   name: string;
   description: string;
   isSystem: boolean;
+  isOrgAdmin: boolean;
   isActive: boolean;
   permissions: Permission[];
   createdAt: Date;

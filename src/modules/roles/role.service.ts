@@ -84,6 +84,11 @@ export async function editRole(
     throw new ForbiddenError('System roles cannot be modified');
   }
 
+  // El admin por organización se sincroniza desde los módulos habilitados
+  if (existing.isOrgAdmin) {
+    throw new ForbiddenError('Admin role cannot be modified directly');
+  }
+
   const updated = await updateRole(id, dto);
 
   await Promise.all([
@@ -119,6 +124,10 @@ export async function removeRole(
 
   if (existing.isSystem) {
     throw new ForbiddenError('System roles cannot be deleted');
+  }
+
+  if (existing.isOrgAdmin) {
+    throw new ForbiddenError('Admin role cannot be deleted');
   }
 
   await deleteRole(id);

@@ -7,7 +7,9 @@ const featuresSchema = z.object({
 	fuel: z.boolean().default(false),
 	maintenance: z.boolean().default(false),
 	administration: z.boolean().default(false),
+	humanResources: z.boolean().default(false),
 	payroll: z.boolean().default(false),
+	catalogs: z.boolean().default(false),
 });
 
 const settingsSchema = z.object({
@@ -22,7 +24,9 @@ const settingsSchema = z.object({
 		fuel: false,
 		maintenance: false,
 		administration: false,
+		humanResources: false,
 		payroll: false,
+		catalogs: false,
 	}),
 });
 

@@ -83,7 +83,9 @@ export async function createOrganization(
 				fuel: false,
 				maintenance: false,
 				administration: false,
+				humanResources: false,
 				payroll: false,
+				catalogs: false,
 				...dto.settings?.features,
 			},
 		},
@@ -126,12 +128,18 @@ export async function updateOrganization(
 
 	if (dto.name) setFields["name"] = dto.name.trim();
 	if (dto.status) setFields["status"] = dto.status;
-	if (dto.settings?.allowedEmailDomains !== undefined) {
-		setFields["settings.allowedEmailDomains"] =
-			dto.settings.allowedEmailDomains;
-	}
-	if (dto.settings?.maxUsers !== undefined) {
-		setFields["settings.maxUsers"] = dto.settings.maxUsers;
+	if (dto.settings) {
+		const s = dto.settings;
+		if (s.timezone !== undefined) setFields["settings.timezone"] = s.timezone;
+		if (s.distanceUnit !== undefined)
+			setFields["settings.distanceUnit"] = s.distanceUnit;
+		if (s.currency !== undefined) setFields["settings.currency"] = s.currency;
+		if (s.gpsUpdateInterval !== undefined)
+			setFields["settings.gpsUpdateInterval"] = s.gpsUpdateInterval;
+		if (s.maxUsers !== undefined) setFields["settings.maxUsers"] = s.maxUsers;
+		if (s.allowedEmailDomains !== undefined)
+			setFields["settings.allowedEmailDomains"] = s.allowedEmailDomains;
+		if (s.features !== undefined) setFields["settings.features"] = s.features;
 	}
 	if (dto.fiscalData !== undefined) setFields.fiscalData = dto.fiscalData;
 	if (dto.contacts !== undefined) setFields.contacts = dto.contacts;

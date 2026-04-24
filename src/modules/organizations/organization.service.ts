@@ -15,6 +15,7 @@ import type { AuditContext } from '../audit/audit.types';
 import { initDepartmentCatalogForOrg } from '../hr/departments/department.service';
 import { initDocumentCatalogForOrg } from '../hr/document-catalog/document-catalog.service';
 import { initPositionCatalogForOrg } from '../hr/positions/position.service';
+import { ensureOrgAdminRole } from '../roles/role.admin.service';
 
 
 import {
@@ -91,6 +92,8 @@ export async function registerOrganization(
 
   await cacheDel(CacheKeys.orgList());
 
+  await ensureOrgAdminRole(org.id, org.settings.features);
+
   // Inicializar catálogos de RH — fire and forget (no bloquean el registro)
   initDocumentCatalogForOrg(org.id, actorId).catch((err) =>
     logger.error({ err, orgId: org.id }, 'Failed to seed document catalog'),
@@ -131,6 +134,10 @@ export async function editOrganization(
     // Invalidar timezone si cambió settings
     dto.settings?.timezone ? cacheDel(CacheKeys.orgTimezone(id)) : Promise.resolve(),
   ]);
+
+  if (dto.settings?.features) {
+    await ensureOrgAdminRole(id, updated.settings.features);
+  }
 
   logger.info({ orgId: id }, 'Organization updated');
 
