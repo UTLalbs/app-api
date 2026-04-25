@@ -1,3 +1,5 @@
+import { ObjectId } from 'mongodb';
+
 import { logger } from '../../config/logger';
 import {
   cacheDel,
@@ -5,10 +7,12 @@ import {
   CacheKeys,
   CacheTTL,
 } from '../../infrastructure/cache/cache.service';
+import { invalidatePermissionsCache } from '../../middleware/authorize';
 import { ConflictError, NotFoundError, ForbiddenError } from '../../shared/errors/AppError';
 import { computeDiff } from '../../shared/utils/diff';
 import { emitAuditEvent } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit.types';
+import { getUserCollection } from '../users/user.model';
 
 import {
   findRoleById,
@@ -19,6 +23,21 @@ import {
   deleteRole,
 } from './role.repository';
 import type { CreateRoleDto, Role, UpdateRoleDto } from './role.types';
+
+// Encuentra todos los usuarios que tienen el role dado y limpia sus caches de
+// permisos/usuario en Redis. Evita que la edición de un rol quede invisible
+// para los usuarios afectados hasta que expire el TTL (5 min).
+async function invalidateUsersWithRole(roleId: string): Promise<void> {
+  const users = await getUserCollection()
+    .find(
+      { 'roles.roleId': new ObjectId(roleId) },
+      { projection: { _id: 1 } },
+    )
+    .toArray();
+  await Promise.all(
+    users.map((u) => invalidatePermissionsCache(String(u._id))),
+  );
+}
 
 const ROLE_UPDATABLE_FIELDS = [
   'name',
@@ -39,12 +58,19 @@ export async function getRoleById(id: string): Promise<Role> {
   return role;
 }
 
-export async function listRoles(orgId?: string): Promise<Role[]> {
-  return getOrSet(
+export async function listRoles(
+  orgId?: string,
+  callerUserType?: string,
+): Promise<Role[]> {
+  const all = await getOrSet(
     CacheKeys.roleList(),
     () => findAllRoles(orgId),
     CacheTTL.LONG,
   );
+  // El cache guarda la lista completa (incluye super_admin). Filtramos
+  // post-read según el caller para no fragmentar el cache.
+  if (callerUserType === 'super_admin') return all;
+  return all.filter((r) => !(r.isSystem && r.orgId === null));
 }
 
 export async function registerRole(
@@ -94,10 +120,15 @@ export async function editRole(
   await Promise.all([
     cacheDel(CacheKeys.roleOne(id)),
     cacheDel(CacheKeys.roleList()),
+    invalidateUsersWithRole(id),
   ]);
 
   logger.info({ roleId: id }, 'Role updated');
 
+  // El diff de `permissions` se computa sobre el array completo. Como `scope`
+  // es ahora parte de cada `Permission`, cualquier cambio de scope queda
+  // reflejado dentro del diff de `permissions` sin necesidad de tracking
+  // adicional.
   const diff = computeDiff<UpdateRoleDto>(
     existing as unknown as Partial<UpdateRoleDto>,
     updated as unknown as Partial<UpdateRoleDto>,
@@ -130,6 +161,7 @@ export async function removeRole(
     throw new ForbiddenError('Admin role cannot be deleted');
   }
 
+  await invalidateUsersWithRole(id);
   await deleteRole(id);
 
   await Promise.all([

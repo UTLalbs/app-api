@@ -9,7 +9,11 @@ export type Action =
   | 'delete'
   | 'cancel'
   | 'export'
-  | 'resolve';
+  | 'resolve'
+  // Acciones específicas de fichajes y schedules
+  | 'correct'
+  | 'exclude'
+  | 'edit_shifts';
 
 export type Resource =
   // Operaciones
@@ -31,8 +35,16 @@ export type Resource =
   | 'payroll'
   | 'payroll_employees'
   | 'payroll_periods'
-  // Empleados
-  | 'employees'             
+  // Recursos Humanos
+  | 'hr_dashboard'
+  | 'employees'
+  | 'time_clocks'
+  | 'schedules'
+  // Configuración de RRHH (sub-catálogos)
+  | 'hr_document_catalog'
+  | 'hr_document_profiles'
+  | 'hr_positions'
+  | 'hr_departments'
   // Catálogos
   | 'users'
   | 'units'
@@ -44,11 +56,28 @@ export type Resource =
   | 'settings'
   // Auditoría
   | 'audit';
+
+// ── Scope (alcance de empleados que ve el rol) ─────────────────────────────
+
+export interface ScopeFilters {
+  departmentKeys?: string[];
+  positionKeys?: string[];
+  locationIds?: string[];
+}
+
+export type PermissionScope =
+  | { type: 'all' }
+  | { type: 'team' }
+  | { type: 'self' }
+  | { type: 'custom'; filters: ScopeFilters };
+
 // ── Subdocumentos ──────────────────────────────────────────────────────────
 
 export interface Permission {
   resource: Resource;
   actions: Action[];
+  // Si está ausente, se interpreta como { type: 'all' } (retrocompatibilidad).
+  scope?: PermissionScope;
 }
 
 // ── Documento en MongoDB ───────────────────────────────────────────────────
@@ -80,23 +109,6 @@ export interface Role {
   createdAt: Date;
   updatedAt: Date;
 }
-
-// ── Roles del sistema ──────────────────────────────────────────────────────
-
-export const SystemRoles = {
-  SUPER_ADMIN:    'super_admin',
-  ORG_ADMIN:      'org_admin',
-  DISPATCHER:     'dispatcher',
-  DRIVER:         'driver',
-  MECHANIC:       'mechanic',
-  ACCOUNTANT:     'accountant',
-  HR:             'hr',
-  MANAGER:        'manager',
-  FUEL_MANAGER:   'fuel_manager',
-  CLIENT_VIEWER:  'client_viewer',
-} as const;
-
-export type SystemRole = typeof SystemRoles[keyof typeof SystemRoles];
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
 

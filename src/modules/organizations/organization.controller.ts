@@ -1,5 +1,6 @@
 import type {Request, Response} from "express";
 
+import {ForbiddenError} from "../../shared/errors/AppError";
 import {asyncHandler} from "../../shared/utils/asyncHandler";
 import {buildAuditContext} from "../../shared/utils/auditContext";
 
@@ -17,7 +18,14 @@ import type {
 
 export const getOrganization = asyncHandler(
 	async (req: Request, res: Response) => {
-		const org = await getOrganizationById(String(req.params.id));
+		const id = String(req.params.id);
+		const user = req.user!;
+		const isSuperAdmin = user.userType === "super_admin";
+		const isOwnOrg = user.orgId === id || user.impersonating?.orgId === id;
+		if (!isSuperAdmin && !isOwnOrg) {
+			throw new ForbiddenError("organization");
+		}
+		const org = await getOrganizationById(id);
 		res.json({success: true, data: org});
 	},
 );

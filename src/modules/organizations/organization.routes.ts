@@ -23,7 +23,10 @@ export const organizationRouter = Router();
 organizationRouter.use(authenticate);
 
 organizationRouter.get('/',    authorize('users', 'read'),    getOrganizations);
-organizationRouter.get('/:id', validate(orgIdParamSchema),    authorize('users', 'read'),    getOrganization);
+// GET /:id no usa authorize: cualquier usuario autenticado puede leer su propia
+// org (necesario para que AppLayout descubra qué features están habilitadas).
+// El controller verifica que sea su propia org o que sea super_admin.
+organizationRouter.get('/:id', validate(orgIdParamSchema),    getOrganization);
 organizationRouter.post('/',   validate(createOrganizationSchema), authorize('users', 'create'), createOrganization);
 organizationRouter.patch('/:id', validate(updateOrganizationSchema), authorize('users', 'update'), updateOrganization);
 organizationRouter.delete('/:id', validate(orgIdParamSchema), authorize('users', 'delete'), deleteOrganization);

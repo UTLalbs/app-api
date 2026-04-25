@@ -1,3 +1,5 @@
+import {ObjectId} from "mongodb";
+
 import {logger} from "../../config/logger";
 import {
 	cacheDel,
@@ -10,6 +12,7 @@ import {NotFoundError, ForbiddenError} from "../../shared/errors/AppError";
 import {computeDiff} from "../../shared/utils/diff";
 import {emitAuditEvent} from "../audit/audit.service";
 import type {AuditContext} from "../audit/audit.types";
+import {getRoleCollection} from "../roles/role.model";
 
 
 import {
@@ -43,6 +46,37 @@ const USER_UPDATABLE_FIELDS = [
   'employeeProfile',
   'clientMemberships',
 ] as const satisfies readonly (keyof UpdateUserDto)[];
+
+// ── Validación de asignación de roles ─────────────────────────────────────
+// Solo super_admin puede asignar roles del sistema (orgId: null, isSystem: true).
+// Hoy ese set se reduce a `super_admin`. Centralizado en una función para
+// futuras adiciones de roles "globales" si llegara a haber.
+
+async function assertCanAssignRoles(
+  callerUserType: string | undefined,
+  roleIds: string[],
+): Promise<void> {
+  if (callerUserType === 'super_admin' || roleIds.length === 0) return;
+
+  const validIds = roleIds
+    .filter((id) => ObjectId.isValid(id))
+    .map((id) => new ObjectId(id));
+  if (validIds.length === 0) return;
+
+  const roles = await getRoleCollection()
+    .find(
+      { _id: { $in: validIds } },
+      { projection: { isSystem: 1, orgId: 1, name: 1 } },
+    )
+    .toArray();
+
+  const restricted = roles.filter((r) => r.isSystem && r.orgId === null);
+  if (restricted.length > 0) {
+    throw new ForbiddenError(
+      `Cannot assign system role(s): ${restricted.map((r) => r.name).join(', ')}`,
+    );
+  }
+}
 
 // ── Consultas ──────────────────────────────────────────────────────────────
 
@@ -115,6 +149,11 @@ export async function registerUser(
     throw new ForbiddenError('Email is already registered');
   }
 
+  await assertCanAssignRoles(
+    context.actor?.userType,
+    (dto.roles ?? []).map((r) => r.roleId),
+  );
+
   const user = await createUser(dto);
 
   // Invalidar lista para que el próximo request la recargue
@@ -143,6 +182,13 @@ export async function editUser(
 ): Promise<User> {
   const existing = await findUserById(id, orgId);
   if (!existing) throw new NotFoundError('User');
+
+  if (dto.roles !== undefined) {
+    await assertCanAssignRoles(
+      context.actor?.userType,
+      dto.roles.map((r) => r.roleId),
+    );
+  }
 
   const updated = await updateUser(id, orgId, dto);
 

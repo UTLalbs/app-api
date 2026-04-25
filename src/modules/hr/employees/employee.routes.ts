@@ -64,21 +64,21 @@ employeeRouter.use(authenticate);
 employeeRouter.get(
   '/',
   validate(listEmployeesSchema),
-  authorize('empoyees', 'read'),
+  authorize('employees', 'read'),
   getEmployees,
 );
 
 employeeRouter.get(
   '/:id',
   validate(employeeIdParamSchema),
-  authorize('empoyees', 'read'),
+  authorize('employees', 'read'),
   getEmployeeById,
 );
 
 employeeRouter.patch(
   '/:id/profile',
   validate(updateEmployeeProfileSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   updateProfile,
 );
 
@@ -89,21 +89,21 @@ employeeRouter.patch(
 employeeRouter.post(
   '/:id/emergency-contacts',
   validate(createEmergencyContactSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   createEmergencyContact,
 );
 
 employeeRouter.patch(
   '/:id/emergency-contacts/:contactId',
   validate(updateEmergencyContactSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   updateEmergencyContact,
 );
 
 employeeRouter.delete(
   '/:id/emergency-contacts/:contactId',
   validate(contactIdParamSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   deleteEmergencyContact,
 );
 
@@ -121,21 +121,21 @@ employeeRouter.patch(
 employeeRouter.post(
   '/:id/bank-accounts',
   validate(createBankAccountSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   createBankAccount,
 );
 
 employeeRouter.patch(
   '/:id/bank-accounts/:accountId',
   validate(updateBankAccountSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   updateBankAccount,
 );
 
 employeeRouter.delete(
   '/:id/bank-accounts/:accountId',
   validate(accountIdParamSchema),
-  authorize('empoyees', 'delete'),
+  authorize('employees', 'delete'),
   deleteBankAccount,
 );
 
@@ -145,21 +145,21 @@ employeeRouter.post(
   '/:id/documents',
   upload.single('file'),
   validate(uploadDocumentSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   uploadEmployeeDocument,
 );
 
 employeeRouter.patch(
   '/:id/documents/:docId',
   validate(updateDocumentSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   updateEmployeeDocument,
 );
 
 employeeRouter.delete(
   '/:id/documents/:docId',
   validate(docIdParamSchema),
-  authorize('empoyees', 'delete'),
+  authorize('employees', 'delete'),
   deleteEmployeeDocument,
 );
 
@@ -167,7 +167,7 @@ employeeRouter.delete(
 employeeRouter.get(
   '/:id/documents/:docId/url',
   validate(docIdParamSchema),
-  authorize('empoyees', 'read'),
+  authorize('employees', 'read'),
   getEmployeeDocumentUrl,
 );
 
@@ -176,34 +176,34 @@ employeeRouter.get(
 employeeRouter.get(
   '/:id/checklist',
   validate(employeeIdParamSchema),
-  authorize('empoyees', 'read'),
+  authorize('employees', 'read'),
   getChecklist,
 );
 
 employeeRouter.post(
   '/:id/checklist/generate',
   validate(employeeIdParamSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   generateEmployeeChecklist,
 );
 
 employeeRouter.post(
   '/:id/checklist',
   validate(createChecklistItemSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   createChecklistItem,
 );
 
 employeeRouter.patch(
   '/:id/checklist/:itemId',
   validate(updateChecklistItemSchema),
-  authorize('empoyees', 'update'),
+  authorize('employees', 'update'),
   updateChecklistItem,
 );
 
 employeeRouter.delete(
   '/:id/checklist/:itemId',
   validate(itemIdParamSchema),
-  authorize('empoyees', 'delete'),
+  authorize('employees', 'delete'),
   deleteChecklistItemHandler,
 );

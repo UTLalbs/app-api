@@ -246,10 +246,12 @@ async function toUser(doc: UserDocument): Promise<User> {
 export async function findAllEmployees(
 	orgId: string,
 	filter: EmployeeQueryFilter,
+	extraFilter: Record<string, unknown> = {},
 ): Promise<{employees: User[]; total: number}> {
 	const query: Record<string, unknown> = {
 		orgId: new ObjectId(orgId),
 		"employeeProfile.isEmployee": true,
+		...extraFilter,
 	};
 
 	if (filter.employmentStatus) {

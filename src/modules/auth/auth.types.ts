@@ -1,3 +1,4 @@
+import type { PermissionScope } from '../roles/role.types';
 import type { UserRoleDto } from '../users/user.types';
 
 // ── Autenticación ──────────────────────────────────────────────────────────
@@ -54,7 +55,11 @@ export interface AuthenticatedUser {
     orgId: string;
     orgName: string;
   } | null;
-  orgTimezone: string;    
-  userTimezone: string;   
+  orgTimezone: string;
+  userTimezone: string;
   resolvedPermissions: Record<string, string[]>;
+  // Scope efectivo del permiso evaluado en el último authorize() de la
+  // request. El handler lo consume para filtrar resultados. Si no hay
+  // authorize() previo o el permiso es {type: 'all'}, queda en {type: 'all'}.
+  permissionScope?: PermissionScope;
 }

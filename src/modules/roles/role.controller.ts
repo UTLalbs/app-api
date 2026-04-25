@@ -18,7 +18,7 @@ export const getRole = asyncHandler(async (req: Request, res: Response) => {
 });
 
 export const getRoles = asyncHandler(async (req: Request, res: Response) => {
-  const roles = await listRoles(req.user?.orgId);
+  const roles = await listRoles(req.user?.orgId, req.user?.userType);
   res.json({ success: true, data: roles, meta: { total: roles.length } });
 });
 

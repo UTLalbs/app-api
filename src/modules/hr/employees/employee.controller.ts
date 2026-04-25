@@ -50,20 +50,24 @@ export const getEmployees = asyncHandler(
 	async (req: Request & ListEmployeesInput, res: Response) => {
 		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
 
-		const {employees, total} = await listEmployees(orgId, {
-			search: req.query.search as string | undefined,
-			department: req.query.department as string | undefined,
-			position: req.query.position as string | undefined,
-			driverStatus: req.query.driverStatus as
-				| "available"
-				| "on_trip"
-				| "off_duty"
-				| undefined,
-			employmentStatus: req.query.employmentStatus as
-				| EmploymentStatus
-				| undefined,
-			excludeTerminated: req.query.excludeTerminated === 'false' ? false : true,
-		});
+		const {employees, total} = await listEmployees(
+			orgId,
+			{
+				search: req.query.search as string | undefined,
+				department: req.query.department as string | undefined,
+				position: req.query.position as string | undefined,
+				driverStatus: req.query.driverStatus as
+					| "available"
+					| "on_trip"
+					| "off_duty"
+					| undefined,
+				employmentStatus: req.query.employmentStatus as
+					| EmploymentStatus
+					| undefined,
+				excludeTerminated: req.query.excludeTerminated === 'false' ? false : true,
+			},
+			req.user!,
+		);
 
 		res.json({success: true, data: employees, meta: {total}});
 	},

@@ -3,7 +3,11 @@ import {ObjectId} from "mongodb";
 
 import {getRedisClient} from "../config/redis";
 import {getRoleCollection} from "../modules/roles/role.model";
-import type {Action} from "../modules/roles/role.types";
+import type {
+	Action,
+	Permission,
+	PermissionScope,
+} from "../modules/roles/role.types";
 import type {UserRoleDto} from "../modules/users/user.types";
 import {USER_TYPE} from "../shared/constants";
 import {ForbiddenError} from "../shared/errors/AppError";
@@ -16,11 +20,21 @@ function permissionsCacheKey(userId: string): string {
 }
 
 // ── Resolver permisos del usuario ─────────────────────────────────────────
-// Carga los roles del usuario desde MongoDB y aplana los permisos
-// Cachea el resultado en Redis para evitar queries repetidos
+// Carga los roles del usuario desde MongoDB y aplana los permisos en una
+// estructura: { [resource]: { [action]: PermissionScope[] } }.
+// Cuando un mismo (resource, action) aparece en múltiples roles, se acumulan
+// los scopes y al evaluar se toma el más amplio (all > team > custom > self).
 
 interface ResolvedPermissions {
-	[resource: string]: Set<Action>;
+	[resource: string]: {
+		[action: string]: PermissionScope[];
+	};
+}
+
+const DEFAULT_SCOPE: PermissionScope = {type: "all"};
+
+function getPermissionScope(permission: Permission): PermissionScope {
+	return permission.scope ?? DEFAULT_SCOPE;
 }
 
 async function resolvePermissions(
@@ -39,11 +53,14 @@ async function resolvePermissions(
 
 	for (const role of roles) {
 		for (const permission of role.permissions) {
+			const scope = getPermissionScope(permission);
 			if (!resolved[permission.resource]) {
-				resolved[permission.resource] = new Set<Action>();
+				resolved[permission.resource] = {};
 			}
+			const resourceMap = resolved[permission.resource];
 			for (const action of permission.actions) {
-				resolved[permission.resource].add(action);
+				if (!resourceMap[action]) resourceMap[action] = [];
+				resourceMap[action].push(scope);
 			}
 		}
 	}
@@ -51,7 +68,7 @@ async function resolvePermissions(
 	return resolved;
 }
 
-async function getResolvedPermissions(
+export async function getResolvedPermissions(
 	userId: string,
 	roles: UserRoleDto[],
 ): Promise<ResolvedPermissions> {
@@ -59,27 +76,16 @@ async function getResolvedPermissions(
 	const cached = await getRedisClient().get(cacheKey);
 
 	if (cached) {
-		// Deserializar — Sets no se serializan directamente en JSON
-		const raw = JSON.parse(cached) as Record<string, Action[]>;
-		const resolved: ResolvedPermissions = {};
-		for (const [resource, actions] of Object.entries(raw)) {
-			resolved[resource] = new Set(actions);
-		}
-		return resolved;
+		// El JSON ya trae el shape correcto (objetos planos con arrays de scope).
+		return JSON.parse(cached) as ResolvedPermissions;
 	}
 
 	const roleIds = roles.map((r) => r.roleId);
 	const resolved = await resolvePermissions(roleIds);
 
-	// Serializar Sets a arrays para Redis
-	const serializable: Record<string, Action[]> = {};
-	for (const [resource, actions] of Object.entries(resolved)) {
-		serializable[resource] = Array.from(actions);
-	}
-
 	await getRedisClient().set(
 		cacheKey,
-		JSON.stringify(serializable),
+		JSON.stringify(resolved),
 		"EX",
 		PERMISSIONS_CACHE_TTL,
 	);
@@ -96,12 +102,41 @@ function hasPermission(
 ): boolean {
 	const resourcePermissions = resolved[resource];
 	if (!resourcePermissions) return false;
-	return resourcePermissions.has(action);
+	return Array.isArray(resourcePermissions[action])
+		&& resourcePermissions[action].length > 0;
+}
+
+// ── Calcular scope efectivo (el más amplio entre los aplicables) ──────────
+// Prioridad: all > team > custom > self.
+// Si dos roles otorgan scope custom, se conserva el primero como representación
+// (la combinación se aplica vía $or en buildScopeFilter del consumidor).
+
+const SCOPE_RANK: Record<PermissionScope["type"], number> = {
+	all: 4,
+	team: 3,
+	custom: 2,
+	self: 1,
+};
+
+function getEffectiveScope(
+	resolved: ResolvedPermissions,
+	resource: string,
+	action: Action,
+): PermissionScope {
+	const scopes = resolved[resource]?.[action];
+	if (!scopes || scopes.length === 0) return DEFAULT_SCOPE;
+	let widest: PermissionScope = scopes[0];
+	for (const s of scopes) {
+		if (SCOPE_RANK[s.type] > SCOPE_RANK[widest.type]) widest = s;
+	}
+	return widest;
 }
 
 // ── Middleware factory ─────────────────────────────────────────────────────
 // Uso: authorize('services', 'read')
 //      authorize('users', 'delete')
+// Tras autorizar, adjunta req.user.permissionScope con el scope efectivo
+// para que el handler pueda filtrar resultados (team, self, custom).
 
 export function authorize(resource: string, action: Action): RequestHandler {
 	return async (
@@ -116,6 +151,7 @@ export function authorize(resource: string, action: Action): RequestHandler {
 
 			// super_admin siempre tiene acceso — sin verificar permisos
 			if (req.user.userType === USER_TYPE.SUPER_ADMIN) {
+				req.user.permissionScope = DEFAULT_SCOPE;
 				return next();
 			}
 
@@ -129,10 +165,14 @@ export function authorize(resource: string, action: Action): RequestHandler {
 			}
 
 			// Adjuntar permisos resueltos al request para uso en controllers
-			// Útil para filtros de cliente (clientId scope)
+			// (formato simple para client-side filtering: { resource: actions[] }).
 			req.user.resolvedPermissions = Object.fromEntries(
-				Object.entries(resolved).map(([r, a]) => [r, Array.from(a)]),
+				Object.entries(resolved).map(([r, actionMap]) => [
+					r,
+					Object.keys(actionMap),
+				]),
 			);
+			req.user.permissionScope = getEffectiveScope(resolved, resource, action);
 
 			next();
 		} catch (err) {
@@ -142,10 +182,16 @@ export function authorize(resource: string, action: Action): RequestHandler {
 }
 
 // ── Helper para invalidar cache de permisos ───────────────────────────────
-// Llamar cuando se cambian los roles de un usuario
+// Llamar cuando se cambian los roles de un usuario.
+// Borra también el cache de `authenticate` (`auth:user:${userId}`) porque ahí
+// guardamos el `resolvedPermissions` aplanado para el frontend.
 
 export async function invalidatePermissionsCache(
 	userId: string,
 ): Promise<void> {
-	await getRedisClient().del(permissionsCacheKey(userId));
+	const redis = getRedisClient();
+	await Promise.all([
+		redis.del(permissionsCacheKey(userId)),
+		redis.del(`auth:user:${userId}`),
+	]);
 }

@@ -6,6 +6,23 @@ import { getOrgTimezone } from '../modules/organizations/organization.service';
 import { findUserById } from '../modules/users/user.repository';
 import { AuthError } from '../shared/errors/AppError';
 
+import { getResolvedPermissions } from './authorize';
+
+// Aplana el shape interno de `getResolvedPermissions` ({[resource]: {[action]: PermissionScope[]}})
+// al formato simple que consume el frontend ({[resource]: action[]}).
+async function loadSimpleResolvedPermissions(
+  userId: string,
+  roles: { roleId: string; name: string }[],
+): Promise<Record<string, string[]>> {
+  const resolved = await getResolvedPermissions(userId, roles);
+  return Object.fromEntries(
+    Object.entries(resolved).map(([resource, actionMap]) => [
+      resource,
+      Object.keys(actionMap),
+    ]),
+  );
+}
+
 
 const DEFAULT_TIMEZONE = 'America/Mexico_City';
 const USER_CACHE_TTL   = 60 * 5;
@@ -36,6 +53,10 @@ export async function authenticate(
 
       const orgTimezone  = await getOrgTimezone(payload.impersonating.orgId);
       const userTimezone = user.preferences?.timezone ?? orgTimezone;
+      const resolvedPermissions = await loadSimpleResolvedPermissions(
+        user.id,
+        user.roles,
+      );
 
       req.user = {
         id:           user.id,
@@ -47,7 +68,7 @@ export async function authenticate(
         impersonating: payload.impersonating,
         orgTimezone,
         userTimezone,
-        resolvedPermissions: {},
+        resolvedPermissions,
       };
       req.orgId = payload.impersonating.orgId;
       return next();
@@ -78,6 +99,11 @@ export async function authenticate(
 
     userTimezone = user.preferences?.timezone ?? orgTimezone;
 
+    const resolvedPermissions = await loadSimpleResolvedPermissions(
+      user.id,
+      user.roles,
+    );
+
     // ── Construir AuthenticatedUser ────────────────────────────────────────
     const authenticatedUser = {
       id:           user.id,
@@ -89,7 +115,7 @@ export async function authenticate(
       impersonating: null,
       orgTimezone,
       userTimezone,
-      resolvedPermissions: {},
+      resolvedPermissions,
     };
 
     // ── Guardar en cache Redis ─────────────────────────────────────────────

@@ -9,8 +9,13 @@ import {
 	generateS3Key,
 	extractKeyFromUrl,
 } from "../../../infrastructure/storage/s3.service";
+import {
+	buildScopeFilter,
+	invalidateTeamHierarchyCache,
+} from "../../../middleware/scope";
 import {NotFoundError, ForbiddenError} from "../../../shared/errors/AppError";
 import {computeDiff} from "../../../shared/utils/diff";
+import type {AuthenticatedUser} from "../../auth/auth.types";
 import {emitAuditEvent} from "../../audit/audit.service";
 import type {AuditContext} from "../../audit/audit.types";
 import type {User} from "../../users/user.types";
@@ -51,12 +56,25 @@ import type {
 } from "./employee.types";
 
 // ── Listar empleados ───────────────────────────────────────────────────────
+//
+// Aplica scope del rol que autorizó la petición (req.user.permissionScope):
+//   - all   → sin filtro adicional, lista toda la org.
+//   - team  → solo el usuario y los empleados que reportan a él (directa o
+//             indirectamente, hasta 5 niveles).
+//   - self  → solo su propio expediente.
+//   - custom → filtros por departamento, puesto o ubicación (una dimensión).
 
 export async function listEmployees(
 	orgId: string,
 	filter: EmployeeQueryFilter,
+	user: AuthenticatedUser,
 ): Promise<{employees: User[]; total: number}> {
-	return findAllEmployees(orgId, filter);
+	const scopeFilter = await buildScopeFilter(
+		user,
+		user.permissionScope,
+		"users",
+	);
+	return findAllEmployees(orgId, filter, scopeFilter as Record<string, unknown>);
 }
 
 // ── Obtener empleado ───────────────────────────────────────────────────────
@@ -96,6 +114,12 @@ export async function editEmployeeProfile(
 	const existing = await findEmployeeById(id, orgId);
 	if ( !existing ) throw new NotFoundError( "Employee" );
 
+	// Capturar managerId previo para invalidar caches de jerarquía
+	// si cambia (afecta al empleado, al manager anterior y al nuevo).
+	const previousManagerId = existing.employeeProfile?.managerId
+		? String(existing.employeeProfile.managerId)
+		: null;
+
 	// Inicializar arrays faltantes
 	await initEmployeeArrays(id, orgId);
 
@@ -115,6 +139,20 @@ export async function editEmployeeProfile(
 			// rfc idéntico → también lo sacamos para no dejarlo en changedFields.
 			delete fields.rfc;
 		}
+	}
+
+	// Si isEmployee se está activando por primera vez y no hay employmentStatus
+	// (ni en fields ni en el doc existente), default a 'active'. Sin esto, la
+	// lista de empleados (que filtra por employmentStatus='active') no muestra
+	// al recién promovido.
+	const wasEmployeeBefore = existing.employeeProfile?.isEmployee ?? false;
+	const isBeingPromoted = !wasEmployeeBefore && fields.isEmployee === true;
+	if (
+		isBeingPromoted &&
+		!fields.employmentStatus &&
+		!existing.employeeProfile?.employmentStatus
+	) {
+		fields.employmentStatus = "active";
 	}
 
 	// Si viene employmentStatus → sincronizar User.status y deletedAt
@@ -154,6 +192,20 @@ export async function editEmployeeProfile(
 
 	const final = await findEmployeeById(id, orgId);
 	if (!final) throw new NotFoundError("Employee");
+
+	// Si el manager cambió, invalidar el cache de team hierarchy del empleado,
+	// del manager anterior y del nuevo: cualquiera de los tres puede tener su
+	// árbol cacheado y ahora está desactualizado.
+	const newManagerId = final.employeeProfile?.managerId
+		? String(final.employeeProfile.managerId)
+		: null;
+	if (newManagerId !== previousManagerId) {
+		await invalidateTeamHierarchyCache([
+			id,
+			previousManagerId,
+			newManagerId,
+		]);
+	}
 
 	logger.info(
 		{employeeId: id, changedFields: Object.keys(fields).length},
