@@ -8,6 +8,7 @@ export type AuditCategory =
   | 'organizations'
   | 'tasks'
   | 'employees'
+  | 'catalogs'       // locations, units, trailers, clients, etc.
   | 'documents'      // catalog + profiles + uploads
   | 'reads'          // lecturas sensibles (PII, URLs S3 firmadas)
   | 'system';        // seed, startup, config changes
@@ -57,6 +58,11 @@ export type AuditAction =
   | 'department_created'
   | 'department_updated'
   | 'department_deleted'
+  // catálogo transversal: locations
+  | 'location_created'
+  | 'location_updated'
+  | 'location_deleted'
+  | 'location_fiscal_validated'
   // documents
   | 'doc_catalog_item_created'
   | 'doc_catalog_item_updated'

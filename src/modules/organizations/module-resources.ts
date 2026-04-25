@@ -109,6 +109,12 @@ export const MODULE_CATALOG: Record<FeatureKey, ModuleSpec> = {
 	},
 	catalogs: {
 		label: "Catálogos",
-		submodules: {},
+		submodules: {
+			locations: {
+				label: "Ubicaciones",
+				actions: FULL_CRUD,
+				supportsScope: false,
+			},
+		},
 	},
 };
