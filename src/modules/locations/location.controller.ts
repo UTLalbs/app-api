@@ -4,10 +4,6 @@ import {asyncHandler} from "../../shared/utils/asyncHandler";
 import {buildAuditContext} from "../../shared/utils/auditContext";
 
 import {
-	autocompleteTags,
-	getPopularTags,
-} from "./location-tag.repository";
-import {
 	autocompleteLocations,
 	checkPointInGeofence,
 	editLocation,
@@ -25,7 +21,6 @@ import type {
 	CreateLocationInput,
 	ListLocationsInput,
 	NearbyLocationsInput,
-	TagsAutocompleteInput,
 	UpdateLocationInput,
 	ValidateFiscalInput,
 } from "./location.validator";
@@ -55,7 +50,6 @@ export const getLocations = asyncHandler(
 
 		const result = await listLocations(orgId, {
 			search: req.query.search,
-			tag: req.query.tag,
 			country: req.query.country,
 			isFiscal,
 			isActive,
@@ -201,22 +195,3 @@ export const checkPointHandler = asyncHandler(
 	},
 );
 
-// ── GET /api/v1/locations/tags/autocomplete ──────────────────────────────
-
-export const tagsAutocompleteHandler = asyncHandler(
-	async (req: Request & TagsAutocompleteInput, res: Response) => {
-		const orgId = effectiveOrgId(req);
-		const tags = await autocompleteTags(orgId, req.query.q ?? "");
-		res.json({success: true, data: tags});
-	},
-);
-
-// ── GET /api/v1/locations/tags/popular ───────────────────────────────────
-
-export const popularTagsHandler = asyncHandler(
-	async (req: Request, res: Response) => {
-		const orgId = effectiveOrgId(req);
-		const tags = await getPopularTags(orgId);
-		res.json({success: true, data: tags});
-	},
-);

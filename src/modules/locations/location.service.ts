@@ -5,8 +5,6 @@ import {emitAuditEvent} from "../audit/audit.service";
 import type {AuditContext} from "../audit/audit.types";
 import {validateRFC} from "../tax/tax.service";
 
-import {reconcileTagUsage} from "./location-tag.repository";
-import {seedSystemTags as seedSystemTagsRepo} from "./location-tag.repository";
 import {
 	autocompleteLocations as autocompleteLocationsRepo,
 	createLocation,
@@ -30,24 +28,6 @@ import type {
 	UpdateLocationDto,
 	ValidateFiscalDto,
 } from "./location.types";
-
-// ── Tags pre-sembrados al crear org ───────────────────────────────────────
-
-export const SYSTEM_LOCATION_TAGS = [
-	"cliente",
-	"oficina",
-	"punto-de-inspeccion",
-	"aduana",
-	"taller",
-];
-
-export async function seedSystemLocationTags(orgId: string): Promise<void> {
-	await seedSystemTagsRepo(orgId, SYSTEM_LOCATION_TAGS);
-	logger.info(
-		{orgId, tags: SYSTEM_LOCATION_TAGS.length},
-		"System location tags seeded for org",
-	);
-}
 
 // ── Generador de idOrigenDestino (Carta Porte) ────────────────────────────
 
@@ -229,21 +209,12 @@ export async function registerLocation(
 		idOrigenDestino,
 	});
 
-	// Reconciliar tag usage (solo incrementar — al crear no hay tags previos).
-	await reconcileTagUsage(orgId, [], location.tags);
-
-	logger.info(
-		{orgId, locationId: location.id, isFiscal: location.isFiscal},
-		"Location created",
-	);
-
 	await emitAuditEvent({
 		category: "catalogs",
 		action: "location_created",
 		target: {type: "location", id: location.id, displayName: location.name},
 		metadata: {
 			isFiscal: location.isFiscal,
-			tagsCount: location.tags.length,
 			...(location.idOrigenDestino && {idOrigenDestino: location.idOrigenDestino}),
 		},
 		context,
@@ -257,7 +228,6 @@ export async function registerLocation(
 const UPDATABLE_FIELDS = [
 	"name",
 	"description",
-	"tags",
 	"location",
 	"geofence",
 	"isFiscal",
@@ -314,14 +284,10 @@ export async function editLocation(
 		...dto,
 		fiscal,
 		updatedBy: context.actor.id,
+		updatedByName: context.actor.displayName,
 		clientName,
 	});
 	if (!updated) throw new NotFoundError("Location");
-
-	// Reconciliar tags si cambiaron.
-	if (dto.tags !== undefined) {
-		await reconcileTagUsage(orgId, existing.tags, updated.tags);
-	}
 
 	const diff = computeDiff(existing, updated, {
 		allowedFields: UPDATABLE_FIELDS,
@@ -416,9 +382,6 @@ export async function removeLocation(
 
 	const ok = await softDeleteLocation(id, orgId);
 	if (!ok) throw new NotFoundError("Location");
-
-	// Decrementar usage de los tags al eliminar.
-	await reconcileTagUsage(orgId, existing.tags, []);
 
 	await emitAuditEvent({
 		category: "catalogs",

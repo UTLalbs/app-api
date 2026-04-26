@@ -31,11 +31,16 @@ export function validate(schema: ZodType) {
     if (data.body   !== undefined) req.body   = data.body;
     if (data.params !== undefined) req.params = data.params as Request['params'];
 
-    // query es readonly — copiar propiedades individualmente
+    // En Express 5, req.query es un getter dinámico — no se puede mutar
+    // sus propiedades porque cada acceso reparsea la query string.
+    // Usamos defineProperty para sobrescribir el getter con el objeto ya
+    // coercido por Zod (importante para z.coerce.number(), z.coerce.boolean()).
     if (data.query !== undefined) {
-      const parsedQuery = data.query as Record<string, unknown>;
-      Object.keys(parsedQuery).forEach((key) => {
-        (req.query as Record<string, unknown>)[key] = parsedQuery[key];
+      Object.defineProperty(req, 'query', {
+        value: data.query,
+        writable: true,
+        configurable: true,
+        enumerable: true,
       });
     }
 

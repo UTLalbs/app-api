@@ -93,7 +93,6 @@ const accessHoursSchema = z.object({
 export const listLocationsSchema = z.object({
 	query: z.object({
 		search: z.string().optional(),
-		tag: z.string().optional(),
 		country: z.string().optional(),
 		isFiscal: z.enum(["true", "false"]).optional(),
 		isActive: z.enum(["true", "false"]).optional(),
@@ -111,7 +110,6 @@ export const createLocationSchema = z.object({
 	body: z.object({
 		name: z.string().min(1).max(200),
 		description: z.string().max(500).nullable().optional(),
-		tags: z.array(z.string()).optional(),
 
 		location: geoPointSchema,
 		geofence: geofenceSchema,
@@ -132,7 +130,6 @@ export const updateLocationSchema = z.object({
 	body: z.object({
 		name: z.string().min(1).max(200).optional(),
 		description: z.string().max(500).nullable().optional(),
-		tags: z.array(z.string()).optional(),
 
 		location: geoPointSchema.optional(),
 		geofence: geofenceSchema.optional(),
@@ -186,12 +183,6 @@ export const checkPointSchema = z.object({
 	}),
 });
 
-export const tagsAutocompleteSchema = z.object({
-	query: z.object({
-		q: z.string().optional(),
-	}),
-});
-
 // ── Inferred types ────────────────────────────────────────────────────────
 
 export type ListLocationsInput = z.infer<typeof listLocationsSchema>;
@@ -201,4 +192,3 @@ export type NearbyLocationsInput = z.infer<typeof nearbyLocationsSchema>;
 export type AutocompleteLocationsInput = z.infer<typeof autocompleteLocationsSchema>;
 export type ValidateFiscalInput = z.infer<typeof validateFiscalSchema>;
 export type CheckPointInput = z.infer<typeof checkPointSchema>;
-export type TagsAutocompleteInput = z.infer<typeof tagsAutocompleteSchema>;

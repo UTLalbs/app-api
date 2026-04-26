@@ -14,8 +14,6 @@ import {
 	getLocationUsageHandler,
 	getLocations,
 	getNearbyHandler,
-	popularTagsHandler,
-	tagsAutocompleteHandler,
 	updateLocationHandler,
 	validateFiscalHandler,
 } from "./location.controller";
@@ -27,7 +25,6 @@ import {
 	listLocationsSchema,
 	locationIdParamSchema,
 	nearbyLocationsSchema,
-	tagsAutocompleteSchema,
 	updateLocationSchema,
 	validateFiscalSchema,
 } from "./location.validator";
@@ -35,19 +32,6 @@ import {
 export const locationRouter = Router();
 
 locationRouter.use(authenticate);
-
-// ── Tags (registrar antes de /:id para evitar colisión) ──────────────────
-locationRouter.get(
-	"/tags/popular",
-	authorize("locations", "read"),
-	popularTagsHandler,
-);
-locationRouter.get(
-	"/tags/autocomplete",
-	validate(tagsAutocompleteSchema),
-	authorize("locations", "read"),
-	tagsAutocompleteHandler,
-);
 
 // ── Búsqueda especializada ───────────────────────────────────────────────
 locationRouter.get(

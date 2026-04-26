@@ -22,7 +22,6 @@ export async function createLocationIndexes(): Promise<void> {
 			unique: true,
 			sparse: true,
 		},
-		{key: {orgId: 1, tags: 1}, name: "orgId_tags"},
 		// Búsqueda por nombre/descripción se hace vía $regex en el repository.
 		// No usamos text index porque el cluster está con apiStrict: true.
 		{key: {location: "2dsphere"}, name: "location_2dsphere"},

@@ -1,6 +1,6 @@
 import {BSONError} from "bson";
 import type {NextFunction, Request, Response} from "express";
-import {MongoError, MongoServerError} from "mongodb";
+import {MongoError, MongoInvalidArgumentError, MongoServerError} from "mongodb";
 
 import {env} from "../config/env";
 import {logger} from "../config/logger";
@@ -69,6 +69,28 @@ export function errorHandler(
 				code: "CONFLICT",
 				message: "Resource already exists",
 				requestId,
+			},
+		} satisfies ErrorResponse);
+		return;
+	}
+
+	// ── MongoDB: argumento inválido al driver (bug de programación) ───────────
+	// Esto pasa cuando le mandamos al driver un valor del tipo equivocado
+	// (ej. .limit("100") en vez de .limit(100)). NO es un problema de DB
+	// transient — es un bug nuestro. Devolver 500 para que se note y se arregle.
+	if (err instanceof MongoInvalidArgumentError) {
+		logger.error(
+			{err, requestId, path: req.path, method: req.method},
+			"MongoDB driver called with invalid argument (programmer bug)",
+		);
+
+		res.status(500).json({
+			success: false,
+			error: {
+				code: "INTERNAL_ERROR",
+				message: "Invalid database operation",
+				requestId,
+				...(env.NODE_ENV === "development" && {stack: err.stack}),
 			},
 		} satisfies ErrorResponse);
 		return;

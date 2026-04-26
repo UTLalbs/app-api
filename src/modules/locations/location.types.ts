@@ -97,6 +97,7 @@ export interface GeoPoint {
 export interface LocationDenormalizedRefs {
 	clientName: string | null;
 	createdByName: string | null;
+	updatedByName: string | null;
 }
 
 // ── Documento en MongoDB ───────────────────────────────────────────────────
@@ -107,7 +108,6 @@ export interface LocationDocument {
 
 	name: string;
 	description: string | null;
-	tags: string[];
 
 	location: GeoPoint;
 	geofence: Geofence;
@@ -152,7 +152,6 @@ export interface Location {
 
 	name: string;
 	description: string | null;
-	tags: string[];
 
 	location: GeoPoint;
 	geofence: Geofence;
@@ -185,7 +184,6 @@ export interface Location {
 export interface CreateLocationDto {
 	name: string;
 	description?: string | null;
-	tags?: string[];
 
 	location: GeoPoint;
 	geofence: Geofence;
@@ -203,7 +201,6 @@ export interface CreateLocationDto {
 export interface UpdateLocationDto {
 	name?: string;
 	description?: string | null;
-	tags?: string[];
 
 	location?: GeoPoint;
 	geofence?: Geofence;
@@ -222,7 +219,6 @@ export interface UpdateLocationDto {
 
 export interface LocationQueryFilter {
 	search?: string;
-	tag?: string;
 	country?: string;       // código ISO (e.g., 'MEX', 'USA')
 	isFiscal?: boolean;
 	isActive?: boolean;
@@ -251,26 +247,4 @@ export interface CheckPointDto {
 
 export interface CheckPointResult {
 	insideGeofence: boolean;
-}
-
-// ── Tags ──────────────────────────────────────────────────────────────────
-
-export interface LocationTagDocument {
-	_id: ObjectId;
-	orgId: ObjectId;
-	tag: string;
-	isSystem: boolean;
-	usageCount: number;
-	lastUsedAt: Date;
-	createdAt: Date;
-}
-
-export interface LocationTag {
-	id: string;
-	orgId: string;
-	tag: string;
-	isSystem: boolean;
-	usageCount: number;
-	lastUsedAt: Date;
-	createdAt: Date;
 }

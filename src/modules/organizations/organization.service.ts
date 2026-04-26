@@ -15,7 +15,6 @@ import type { AuditContext } from '../audit/audit.types';
 import { initDepartmentCatalogForOrg } from '../hr/departments/department.service';
 import { initDocumentCatalogForOrg } from '../hr/document-catalog/document-catalog.service';
 import { initPositionCatalogForOrg } from '../hr/positions/position.service';
-import { seedSystemLocationTags } from '../locations/location.service';
 import { ensureOrgAdminRole } from '../roles/role.admin.service';
 
 
@@ -104,9 +103,6 @@ export async function registerOrganization(
   );
   initDepartmentCatalogForOrg(org.id, actorId).catch((err) =>
     logger.error({ err, orgId: org.id }, 'Failed to seed department catalog'),
-  );
-  seedSystemLocationTags(org.id).catch((err) =>
-    logger.error({ err, orgId: org.id }, 'Failed to seed location tags'),
   );
 
   logger.info({ orgId: org.id, slug }, 'Organization registered');

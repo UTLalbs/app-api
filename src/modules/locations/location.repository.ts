@@ -17,7 +17,6 @@ function toLocation(doc: LocationDocument): Location {
 		orgId: doc.orgId.toHexString(),
 		name: doc.name,
 		description: doc.description,
-		tags: doc.tags,
 		location: doc.location,
 		geofence: doc.geofence,
 		isFiscal: doc.isFiscal,
@@ -54,15 +53,19 @@ export async function findLocations(
 	if (filter.isActive !== undefined) query.isActive = filter.isActive;
 	if (filter.isFiscal !== undefined) query.isFiscal = filter.isFiscal;
 	if (filter.country) query["address.country.code"] = filter.country;
-	if (filter.tag) query.tags = filter.tag;
 	if (filter.clientId && ObjectId.isValid(filter.clientId)) {
 		query.clientId = new ObjectId(filter.clientId);
 	}
 	if (filter.search) {
+		const rx = {$regex: filter.search, $options: "i"};
 		query.$or = [
-			{name: {$regex: filter.search, $options: "i"}},
-			{description: {$regex: filter.search, $options: "i"}},
-			{tags: {$regex: filter.search, $options: "i"}},
+			{name: rx},
+			{description: rx},
+			{"fiscal.rfc": rx},
+			{"fiscal.taxId": rx},
+			{"fiscal.razonSocial": rx},
+			{idOrigenDestino: rx},
+			{"address.cp": rx},
 		];
 	}
 
@@ -207,7 +210,6 @@ export async function createLocation(
 		orgId: new ObjectId(dto.orgId),
 		name: dto.name,
 		description: dto.description ?? null,
-		tags: dto.tags ?? [],
 		location: dto.location,
 		geofence: dto.geofence,
 		isFiscal: dto.isFiscal,
@@ -240,6 +242,7 @@ export async function createLocation(
 		denormalizedRefs: {
 			clientName: dto.clientName ?? null,
 			createdByName: dto.createdByName,
+			updatedByName: null,
 		},
 	};
 
@@ -254,6 +257,7 @@ export async function createLocation(
 
 export interface UpdateLocationInternal extends UpdateLocationDto {
 	updatedBy: string;
+	updatedByName: string;
 	clientName?: string | null;
 }
 
@@ -267,11 +271,11 @@ export async function updateLocation(
 	const setFields: Record<string, unknown> = {
 		updatedAt: new Date(),
 		updatedBy: new ObjectId(dto.updatedBy),
+		"denormalizedRefs.updatedByName": dto.updatedByName,
 	};
 
 	if (dto.name !== undefined) setFields.name = dto.name;
 	if (dto.description !== undefined) setFields.description = dto.description;
-	if (dto.tags !== undefined) setFields.tags = dto.tags;
 	if (dto.location !== undefined) setFields.location = dto.location;
 	if (dto.geofence !== undefined) setFields.geofence = dto.geofence;
 	if (dto.isFiscal !== undefined) setFields.isFiscal = dto.isFiscal;
