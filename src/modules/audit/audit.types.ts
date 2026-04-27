@@ -8,6 +8,7 @@ export type AuditCategory =
   | 'organizations'
   | 'tasks'
   | 'employees'
+  | 'schedules'      // plantillas de turnos + asignaciones
   | 'catalogs'       // locations, units, trailers, clients, etc.
   | 'documents'      // catalog + profiles + uploads
   | 'reads'          // lecturas sensibles (PII, URLs S3 firmadas)
@@ -63,6 +64,13 @@ export type AuditAction =
   | 'location_updated'
   | 'location_deleted'
   | 'location_fiscal_validated'
+  // schedules (programación de turnos)
+  | 'template_created'
+  | 'template_updated'
+  | 'template_deleted'
+  | 'schedule_created'
+  | 'schedule_updated'
+  | 'schedule_deleted'
   // documents
   | 'doc_catalog_item_created'
   | 'doc_catalog_item_updated'

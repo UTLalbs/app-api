@@ -88,7 +88,7 @@ const ID_FIELD_BY_TARGET: Record<ScopeTargetCollection, string> = {
 	users: "_id",
 	employees: "_id",
 	time_clocks: "employeeId",
-	schedules: "employeeId",
+	schedules: "userId",
 };
 
 export async function buildScopeFilter(
