@@ -606,3 +606,29 @@ export async function softDeleteAssignment(
 
   return result.modifiedCount > 0;
 }
+
+// Inverso de softDeleteAssignment. Limpia deletedAt para que el schedule
+// vuelva a aparecer en queries normales. Idempotente: si ya está activo no
+// hace nada.
+export async function restoreAssignment(
+  id: string,
+  orgId: string,
+): Promise<boolean> {
+  if (!ObjectId.isValid(id)) return false;
+
+  const result = await getScheduleAssignmentCollection().updateOne(
+    {
+      _id: new ObjectId(id),
+      orgId: new ObjectId(orgId),
+      deletedAt: { $ne: null },
+    },
+    {
+      $set: {
+        deletedAt: null,
+        updatedAt: new Date(),
+      },
+    },
+  );
+
+  return result.modifiedCount > 0;
+}

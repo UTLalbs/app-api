@@ -6,7 +6,13 @@ export type NotificationType =
   | 'assignment'
   | 'status_change'
   | 'due_soon'
-  | 'system';
+  | 'system'
+  // Ausencias (HR)
+  | 'absence_requested'
+  | 'absence_hr_approval_needed'
+  | 'absence_approved'
+  | 'absence_rejected'
+  | 'absence_coverage_needed';
 
 // ── Documento en MongoDB ───────────────────────────────────────────────────
 

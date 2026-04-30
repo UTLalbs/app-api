@@ -12,6 +12,7 @@ import { computeDiff } from '../../shared/utils/diff';
 import { generateSlug } from '../../shared/utils/slug';
 import { emitAuditEvent } from '../audit/audit.service';
 import type { AuditContext } from '../audit/audit.types';
+import { seedAbsenceCategoriesForOrg } from '../hr/absences/absence-category.seed';
 import { initDepartmentCatalogForOrg } from '../hr/departments/department.service';
 import { initDocumentCatalogForOrg } from '../hr/document-catalog/document-catalog.service';
 import { initPositionCatalogForOrg } from '../hr/positions/position.service';
@@ -103,6 +104,9 @@ export async function registerOrganization(
   );
   initDepartmentCatalogForOrg(org.id, actorId).catch((err) =>
     logger.error({ err, orgId: org.id }, 'Failed to seed department catalog'),
+  );
+  seedAbsenceCategoriesForOrg(org.id).catch((err) =>
+    logger.error({ err, orgId: org.id }, 'Failed to seed absence categories'),
   );
 
   logger.info({ orgId: org.id, slug }, 'Organization registered');

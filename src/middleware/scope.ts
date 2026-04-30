@@ -82,13 +82,15 @@ export type ScopeTargetCollection =
 	| "users"
 	| "time_clocks"
 	| "schedules"
-	| "employees";
+	| "employees"
+	| "absences";
 
 const ID_FIELD_BY_TARGET: Record<ScopeTargetCollection, string> = {
 	users: "_id",
 	employees: "_id",
 	time_clocks: "employeeId",
 	schedules: "userId",
+	absences: "userId",
 };
 
 export async function buildScopeFilter(

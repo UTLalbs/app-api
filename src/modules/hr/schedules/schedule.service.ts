@@ -13,6 +13,7 @@ import { emitAuditEvent } from '../../audit/audit.service';
 import type { AuditContext } from '../../audit/audit.types';
 import { getLocationCollection } from '../../locations/location.model';
 import { getUserCollection } from '../../users/user.model';
+import { findOverlappingForSchedule } from '../absences/absence.repository';
 
 import {
   calcAssignmentMinutes,
@@ -257,11 +258,29 @@ async function detectConflicts(
     }
   }
 
-  // 4) TODO(absences-module): cuando exista el módulo absences, validar overlap aquí.
-  //    const overlapping = await absencesRepo.findOverlapping(orgId, userId, workDate);
-  //    if (overlapping.length > 0) {
-  //      conflicts.push({ type: 'absence_overlap', severity: 'critical', ... });
-  //    }
+  // 4) Solapamiento con ausencias aprobadas o pendientes del empleado.
+  const overlappingAbsences = await findOverlappingForSchedule(
+    orgId,
+    userId,
+    workDate,
+  );
+  if (overlappingAbsences.length > 0) {
+    const first = overlappingAbsences[0];
+    const isApproved = first.status === 'approved';
+    conflicts.push({
+      type: 'absence_overlap',
+      severity: isApproved ? 'critical' : 'warning',
+      description: isApproved
+        ? `Empleado tiene ausencia aprobada (${first.denormalizedRefs.categoryName})`
+        : `Empleado tiene solicitud pendiente (${first.denormalizedRefs.categoryName})`,
+      affectedPeriodId: null,
+      details: {
+        absenceIds: overlappingAbsences.map((a) => a._id.toHexString()),
+        categoryKey: first.categoryKey,
+        statuses: overlappingAbsences.map((a) => a.status),
+      },
+    });
+  }
 
   return conflicts;
 }

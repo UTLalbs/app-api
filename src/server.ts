@@ -12,6 +12,7 @@ import {startAuditWorker, stopAuditWorker} from "./infrastructure/jobs/audit.wor
 import {registerEmployeeAlertsJob} from "./infrastructure/jobs/employee.alerts.job";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
+import {createAbsenceIndexes} from "./modules/hr/absences/absence.model";
 import {createDepartmentIndexes} from "./modules/hr/departments/department.model";
 import {createDocumentCatalogIndexes} from "./modules/hr/document-catalog/document-catalog.model";
 import {createDocumentProfileIndexes} from "./modules/hr/document-profiles/document-profile.model";
@@ -19,7 +20,10 @@ import {createPositionIndexes} from "./modules/hr/positions/position.model";
 import {createScheduleIndexes} from "./modules/hr/schedules/schedule.model";
 import {createLocationIndexes} from "./modules/locations/location.model";
 import {createNotificationIndexes} from "./modules/notifications/notification.model";
+import {findAllOrganizations} from "./modules/organizations/organization.repository";
 import {createOrganizationIndexes} from "./modules/organizations/organization.model";
+import {seedAbsenceCategoriesForOrg} from "./modules/hr/absences/absence-category.seed";
+import {ensureOrgAdminRole} from "./modules/roles/role.admin.service";
 import {createRoleIndexes} from "./modules/roles/role.model";
 import {seedRoles} from "./modules/roles/role.seed";
 import {createTaskIndexes} from "./modules/tasks/task.model";
@@ -44,11 +48,72 @@ async function bootstrap(): Promise<void> {
 		createDepartmentIndexes(),
 		createLocationIndexes(),
 		createScheduleIndexes(),
+		createAbsenceIndexes(),
 		registerEmployeeAlertsJob(),
 	]);
 
 	// Seed — crea o actualiza roles del sistema
 	await seedRoles();
+
+	// Resync de roles admin per-org. Idempotente: si los permisos del catálogo
+	// (MODULE_RESOURCES / MODULE_CATALOG) cambian — p. ej. al sumar un módulo
+	// nuevo como `absences` — esto refleja los nuevos permisos en el rol admin
+	// de cada org sin requerir intervención manual.
+	const orgs = await findAllOrganizations();
+	let resynced = 0;
+	let skipped = 0;
+	await Promise.all(
+		orgs.map(async (o) => {
+			const features = o.settings?.features;
+			if (!features) {
+				skipped++;
+				logger.warn(
+					{orgId: o.id, orgName: o.name},
+					"Org sin settings.features — admin role no resync",
+				);
+				return;
+			}
+			try {
+				await ensureOrgAdminRole(o.id, features);
+				resynced++;
+			} catch (err) {
+				skipped++;
+				logger.error({err, orgId: o.id}, "Failed to resync admin role");
+			}
+		}),
+	);
+	logger.info(
+		{resynced, skipped, total: orgs.length},
+		"✅  Org admin roles resynced",
+	);
+
+	// Resync de catálogo de categorías de ausencias para orgs existentes.
+	// Idempotente: el seed usa upsert + isSystem para no pisar customs ni el
+	// flag isActive cuando ya existían.
+	let absenceSeeded = 0;
+	let absenceSkipped = 0;
+	await Promise.all(
+		orgs.map(async (o) => {
+			if (!o.settings?.features) {
+				absenceSkipped++;
+				return;
+			}
+			try {
+				await seedAbsenceCategoriesForOrg(o.id);
+				absenceSeeded++;
+			} catch (err) {
+				absenceSkipped++;
+				logger.error(
+					{err, orgId: o.id},
+					"Failed to seed absence categories",
+				);
+			}
+		}),
+	);
+	logger.info(
+		{seeded: absenceSeeded, skipped: absenceSkipped, total: orgs.length},
+		"✅  Absence categories resynced",
+	);
 
 	// Inicializar OIDC strategies en paralelo
 	await Promise.all([initGoogleStrategy(), initMicrosoftStrategy()]);

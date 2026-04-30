@@ -9,6 +9,7 @@ export type AuditCategory =
   | 'tasks'
   | 'employees'
   | 'schedules'      // plantillas de turnos + asignaciones
+  | 'absences'       // solicitudes de ausencia + aprobaciones + categorías
   | 'catalogs'       // locations, units, trailers, clients, etc.
   | 'documents'      // catalog + profiles + uploads
   | 'reads'          // lecturas sensibles (PII, URLs S3 firmadas)
@@ -71,6 +72,16 @@ export type AuditAction =
   | 'schedule_created'
   | 'schedule_updated'
   | 'schedule_deleted'
+  // absences (ausencias y categorías)
+  | 'absence_requested'
+  | 'absence_updated'
+  | 'absence_approved'
+  | 'absence_rejected'
+  | 'absence_cancelled'
+  | 'absence_coverage_assigned'
+  | 'absence_category_created'
+  | 'absence_category_updated'
+  | 'absence_category_deleted'
   // documents
   | 'doc_catalog_item_created'
   | 'doc_catalog_item_updated'
@@ -113,6 +124,10 @@ export const SENSITIVE_ACTIONS: ReadonlySet<AuditAction> = new Set<AuditAction>(
   'org_deleted',
   'employee_deleted',
   'employee_status_changed',
+  // absences (compliance + LFT)
+  'absence_approved',
+  'absence_rejected',
+  'absence_cancelled',
   // PII
   'employee_pii_updated',
   'employee_pii_read',

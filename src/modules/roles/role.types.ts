@@ -13,7 +13,9 @@ export type Action =
   // Acciones específicas de fichajes y schedules
   | 'correct'
   | 'exclude'
-  | 'edit_shifts';
+  | 'edit_shifts'
+  // Acciones específicas de ausencias
+  | 'approve';
 
 export type Resource =
   // Operaciones
@@ -40,11 +42,13 @@ export type Resource =
   | 'employees'
   | 'time_clocks'
   | 'schedules'
+  | 'absences'
   // Configuración de RRHH (sub-catálogos)
   | 'hr_document_catalog'
   | 'hr_document_profiles'
   | 'hr_positions'
   | 'hr_departments'
+  | 'absence_categories'
   // Catálogos
   | 'users'
   | 'units'

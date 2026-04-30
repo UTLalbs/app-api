@@ -13,6 +13,7 @@ import {apiLimiter} from "./middleware/rateLimiter";
 import {requestId} from "./middleware/requestId";
 import {auditRouter} from "./modules/audit/audit.routes";
 import {authRouter} from "./modules/auth/auth.routes";
+import {absenceRouter} from "./modules/hr/absences/absence.routes";
 import {departmentRouter} from "./modules/hr/departments/department.routes";
 import {documentCatalogRouter} from "./modules/hr/document-catalog/document-catalog.routes";
 import {documentProfileRouter} from "./modules/hr/document-profiles/document-profile.routes";
@@ -92,6 +93,7 @@ export function createApp(httpLogger: RequestHandler): express.Application {
 	app.use("/api/v1/hr/positions", apiLimiter, positionRouter);
 	app.use("/api/v1/hr/departments", apiLimiter, departmentRouter);
 	app.use("/api/v1/hr/schedules", apiLimiter, scheduleRouter);
+	app.use("/api/v1/hr/absences", apiLimiter, absenceRouter);
 	app.use("/api/v1/locations", apiLimiter, locationRouter);
 	app.use("/api/v1/audit", apiLimiter, auditRouter);
 

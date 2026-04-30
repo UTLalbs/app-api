@@ -13,10 +13,12 @@ export const MODULE_RESOURCES = {
 		"employees",
 		"time_clocks",
 		"schedules",
+		"absences",
 		"hr_document_catalog",
 		"hr_document_profiles",
 		"hr_positions",
 		"hr_departments",
+		"absence_categories",
 	],
 	payroll: ["payroll", "payroll_periods"],
 	catalogs: ["users", "units", "trailers", "clients", "locations", "tax_entities"],
@@ -81,6 +83,11 @@ export const MODULE_CATALOG: Record<FeatureKey, ModuleSpec> = {
 				actions: ["read", "edit_shifts"],
 				supportsScope: true,
 			},
+			absences: {
+				label: "Ausencias",
+				actions: ["read", "create", "update", "approve", "cancel"],
+				supportsScope: true,
+			},
 			hr_document_catalog: {
 				label: "Catálogo de documentos",
 				actions: ["read", "create", "update"],
@@ -98,6 +105,11 @@ export const MODULE_CATALOG: Record<FeatureKey, ModuleSpec> = {
 			},
 			hr_departments: {
 				label: "Departamentos",
+				actions: ["read", "create", "update"],
+				supportsScope: false,
+			},
+			absence_categories: {
+				label: "Tipos de ausencia",
 				actions: ["read", "create", "update"],
 				supportsScope: false,
 			},

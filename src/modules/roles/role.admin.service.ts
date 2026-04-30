@@ -7,13 +7,14 @@ import {
 } from "../../infrastructure/cache/cache.service";
 import {
   FULL_CRUD,
+  MODULE_CATALOG,
   MODULE_RESOURCES,
   type FeatureKey,
 } from "../organizations/module-resources";
 import type { OrganizationSettings } from "../organizations/organization.types";
 
 import { getRoleCollection } from "./role.model";
-import type { Permission, RoleDocument } from "./role.types";
+import type { Action, Permission, RoleDocument } from "./role.types";
 
 function buildAdminPermissions(
   features: OrganizationSettings["features"],
@@ -23,7 +24,12 @@ function buildAdminPermissions(
   (Object.keys(MODULE_RESOURCES) as FeatureKey[]).forEach((feature) => {
     if (!features[feature]) return;
     for (const resource of MODULE_RESOURCES[feature]) {
-      permissions.push({ resource, actions: [...FULL_CRUD] });
+      // Combina FULL_CRUD con cualquier acción específica declarada en el
+      // catálogo (ej. 'approve' para absences, 'edit_shifts' para schedules).
+      const catalogActions =
+        MODULE_CATALOG[feature]?.submodules[resource]?.actions ?? [];
+      const merged = new Set<Action>([...FULL_CRUD, ...catalogActions]);
+      permissions.push({ resource, actions: [...merged] });
     }
   });
 
