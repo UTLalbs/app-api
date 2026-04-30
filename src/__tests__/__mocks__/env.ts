@@ -16,5 +16,5 @@ export const env = {
   FRONTEND_URL: 'http://localhost:5173',
   RATE_LIMIT_WINDOW_MS: 900000,
   RATE_LIMIT_MAX_AUTH: 20,
-  RATE_LIMIT_MAX_API: 200,
+  RATE_LIMIT_MAX_API: 5000,
 };

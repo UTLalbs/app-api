@@ -66,7 +66,7 @@ const envSchema = z.object({
 	// Rate limiting
 	RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
 	RATE_LIMIT_MAX_AUTH: z.coerce.number().default(10),
-	RATE_LIMIT_MAX_API: z.coerce.number().default(100),
+	RATE_LIMIT_MAX_API: z.coerce.number().default(5000),
 
 	// FacturoPorTi / Tax service
 	FACTUROPORTI_BASE_URL: z.string().url(),
