@@ -75,8 +75,8 @@ export async function invalidateTeamHierarchyCache(
 // Retorna un Filter listo para mergear con la query principal.
 // `targetCollection` indica sobre qué colección se filtra para usar la clave
 // correcta de "empleado dueño del registro":
-//   - 'users':       _id
-//   - 'time_clocks', 'schedules', etc.: employeeId
+//   - 'users' / 'employees': _id
+//   - 'schedules' / 'absences' / 'time_clocks': userId
 
 export type ScopeTargetCollection =
 	| "users"
@@ -88,7 +88,7 @@ export type ScopeTargetCollection =
 const ID_FIELD_BY_TARGET: Record<ScopeTargetCollection, string> = {
 	users: "_id",
 	employees: "_id",
-	time_clocks: "employeeId",
+	time_clocks: "userId",
 	schedules: "userId",
 	absences: "userId",
 };

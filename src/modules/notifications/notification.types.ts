@@ -12,7 +12,15 @@ export type NotificationType =
   | 'absence_hr_approval_needed'
   | 'absence_approved'
   | 'absence_rejected'
-  | 'absence_coverage_needed';
+  | 'absence_coverage_needed'
+  // Fichajes (HR)
+  | 'clock_geofence_anomaly'
+  | 'clock_missing_clockin'
+  | 'clock_service_missing'
+  | 'clock_manual_correction'
+  | 'clock_event_excluded'
+  | 'clock_overtime_exceeded'
+  | 'clock_review_session_late';
 
 // ── Documento en MongoDB ───────────────────────────────────────────────────
 

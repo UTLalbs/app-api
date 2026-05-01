@@ -18,6 +18,7 @@ import {createDocumentCatalogIndexes} from "./modules/hr/document-catalog/docume
 import {createDocumentProfileIndexes} from "./modules/hr/document-profiles/document-profile.model";
 import {createPositionIndexes} from "./modules/hr/positions/position.model";
 import {createScheduleIndexes} from "./modules/hr/schedules/schedule.model";
+import {createTimeClockIndexes} from "./modules/hr/time-clocks/time-clock.model";
 import {createLocationIndexes} from "./modules/locations/location.model";
 import {createNotificationIndexes} from "./modules/notifications/notification.model";
 import {findAllOrganizations} from "./modules/organizations/organization.repository";
@@ -49,6 +50,7 @@ async function bootstrap(): Promise<void> {
 		createLocationIndexes(),
 		createScheduleIndexes(),
 		createAbsenceIndexes(),
+		createTimeClockIndexes(),
 		registerEmployeeAlertsJob(),
 	]);
 

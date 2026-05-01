@@ -20,6 +20,7 @@ import {documentProfileRouter} from "./modules/hr/document-profiles/document-pro
 import {employeeRouter} from "./modules/hr/employees/employee.routes";
 import {positionRouter} from "./modules/hr/positions/position.routes";
 import {scheduleRouter} from "./modules/hr/schedules/schedule.routes";
+import {timeClockRouter} from "./modules/hr/time-clocks/time-clock.routes";
 import {locationRouter} from "./modules/locations/location.routes";
 import {notificationRouter} from "./modules/notifications/notification.routes";
 import {organizationRouter} from "./modules/organizations/organization.routes";
@@ -94,6 +95,7 @@ export function createApp(httpLogger: RequestHandler): express.Application {
 	app.use("/api/v1/hr/departments", apiLimiter, departmentRouter);
 	app.use("/api/v1/hr/schedules", apiLimiter, scheduleRouter);
 	app.use("/api/v1/hr/absences", apiLimiter, absenceRouter);
+	app.use("/api/v1/hr/time-clocks", apiLimiter, timeClockRouter);
 	app.use("/api/v1/locations", apiLimiter, locationRouter);
 	app.use("/api/v1/audit", apiLimiter, auditRouter);
 
