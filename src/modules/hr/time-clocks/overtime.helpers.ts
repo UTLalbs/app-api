@@ -186,6 +186,48 @@ export function combineDateAndTime(date: Date, time: string): Date {
   return new Date(date.getTime() + minutes * 60_000);
 }
 
+// Dado un instante UTC y la timezone de la org, devuelve el `workDate`
+// (UTC-midnight) del día local en que cae ese instante.
+//
+// Ejemplo: instant=2026-05-05T00:19Z, tz=America/Mexico_City (UTC-5 en DST)
+//   → wall-clock local = 2026-05-04 19:19 → workDate = 2026-05-04T00:00Z
+//
+// Esto es lo que necesitamos para asignar correctamente eventos a días de
+// trabajo: un fichaje de salida a las 6:19 PM Mexico (00:19 UTC) pertenece
+// al día de trabajo Mexico May 4, no al "May 5 UTC".
+export function workDateInTimezone(instant: Date, timezone: string): Date {
+  const offsetMin = timezoneOffsetMinutes(instant, timezone);
+  // "Localiza" el instante: lo desplazamos por el offset para que su
+  // representación UTC sea igual al wall-clock local.
+  const localized = new Date(instant.getTime() + offsetMin * 60_000);
+  return new Date(
+    Date.UTC(
+      localized.getUTCFullYear(),
+      localized.getUTCMonth(),
+      localized.getUTCDate(),
+      0,
+      0,
+      0,
+      0,
+    ),
+  );
+}
+
+// Dado un workDate (UTC-midnight que representa un día local) y la timezone,
+// devuelve el rango de instantes UTC reales que caen en ese día local.
+//
+// Ejemplo: workDate=2026-05-04T00:00Z, tz=America/Mexico_City (UTC-5)
+//   → start=2026-05-04T05:00:00Z, end=2026-05-05T04:59:59.999Z
+export function localDayUtcRange(
+  workDate: Date,
+  timezone: string,
+): { start: Date; end: Date } {
+  const offsetMin = timezoneOffsetMinutes(workDate, timezone);
+  const start = new Date(workDate.getTime() - offsetMin * 60_000);
+  const end = new Date(start.getTime() + 24 * 60 * 60_000 - 1);
+  return { start, end };
+}
+
 // Offset firmado en minutos de una timezone respecto a UTC para una
 // fecha específica. Útil para soportar DST cuando aplique.
 function timezoneOffsetMinutes(date: Date, timezone: string): number {

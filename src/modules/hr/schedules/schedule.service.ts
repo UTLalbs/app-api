@@ -609,6 +609,8 @@ export async function registerAssignment(
           })),
           applyAutoBreak: tpl.applyAutoBreak,
           breakDurationMinutes: tpl.breakDurationMinutes,
+          breakStartTime: null,
+          breakEndTime: null,
           coveringForUserId: null,
           coverageReason: null,
           notes: null,
@@ -781,6 +783,8 @@ export async function editAssignment(
       })),
       applyAutoBreak: p.applyAutoBreak,
       breakDurationMinutes: p.breakDurationMinutes,
+      breakStartTime: p.breakStartTime ?? null,
+      breakEndTime: p.breakEndTime ?? null,
       coveringForUserId: p.coveringForUserId
         ? p.coveringForUserId.toHexString()
         : null,
@@ -872,6 +876,8 @@ export async function listConflicts(
         })),
         applyAutoBreak: p.applyAutoBreak,
         breakDurationMinutes: p.breakDurationMinutes,
+        breakStartTime: p.breakStartTime ?? null,
+        breakEndTime: p.breakEndTime ?? null,
         coveringForUserId: p.coveringForUserId
           ? p.coveringForUserId.toHexString()
           : null,

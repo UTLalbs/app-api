@@ -107,9 +107,20 @@ export async function loginWithOIDC(
 		throw new ForbiddenError("Account is disabled");
 	}
 
-	// Regla 6: cuenta pendiente puede autenticarse
-	if (user.status === USER_STATUS.PENDING) {
-		logger.info({userId: user.id}, "Pending user logged in");
+	// Regla 6: cuenta pendiente NO puede autenticarse — debe ser activada
+	// primero por un admin (RH-004). Un super_admin sí puede entrar aunque
+	// esté pending (caso bootstrap de la plataforma).
+	if (
+		user.status === USER_STATUS.PENDING &&
+		user.userType !== "super_admin"
+	) {
+		logger.warn(
+			{userId: user.id},
+			"Pending user attempted login — blocked",
+		);
+		throw new ForbiddenError(
+			"Tu cuenta está pendiente de activación. Contacta al administrador de tu organización.",
+		);
 	}
 
 	// Fire and forget
@@ -197,6 +208,16 @@ export async function refreshSession(
 
 	if (user.status === USER_STATUS.INACTIVE || user.status === USER_STATUS.SUSPENDED) {
 		throw new ForbiddenError("Account is disabled");
+	}
+
+	// Pending también bloquea refresh (excepto super_admin para bootstrap).
+	if (
+		user.status === USER_STATUS.PENDING &&
+		user.userType !== "super_admin"
+	) {
+		throw new ForbiddenError(
+			"Tu cuenta está pendiente de activación.",
+		);
 	}
 
 	// Preservar contexto de impersonación si existe

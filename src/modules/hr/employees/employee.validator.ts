@@ -221,6 +221,114 @@ const vehicleOperatorSchema = z.object({
 	fmcsa: fmcsaSchema,
 });
 
+// ── Work schedule (patrón base del empleado) ──────────────────────────────
+
+const jornadaTypeSchema = z.enum([
+	"diurna",
+	"nocturna",
+	"mixta",
+	"acumulada",
+	"por_viaje",
+]);
+
+const dayOfWeekSchema = z.enum([
+	"monday",
+	"tuesday",
+	"wednesday",
+	"thursday",
+	"friday",
+	"saturday",
+	"sunday",
+]);
+
+const timeStringSchema = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+
+const shiftTypeSchema = z.enum([
+	"regular",
+	"mixed",
+	"inhouse",
+	"multi_day",
+	"coverage",
+	"training",
+]);
+
+const dayShiftSchema = z
+	.object({
+		shiftType: shiftTypeSchema,
+		startTime: timeStringSchema,
+		endTime: timeStringSchema,
+		multiDay: z.boolean().default(false),
+		endDayOffset: z.number().int().min(0).max(7).default(0),
+		startLocationId: z.string().length(24).nullable(),
+		endLocationId: z.string().length(24).nullable(),
+		applyAutoBreak: z.boolean().default(false),
+		breakDurationMinutes: z.number().int().min(0).max(120).default(0),
+		breakStartTime: timeStringSchema.nullable().default(null),
+		breakEndTime: timeStringSchema.nullable().default(null),
+		notes: z.string().max(500).nullable().default(null),
+	})
+	.refine(
+		(s) => {
+			if (!s.breakStartTime || !s.breakEndTime) return true;
+			return s.breakEndTime > s.breakStartTime;
+		},
+		{message: "breakEndTime debe ser mayor que breakStartTime"},
+	)
+	.refine(
+		(s) => {
+			if (!s.breakStartTime || !s.breakEndTime) return true;
+			// Best-effort: si no es multi-day, validar que el descanso quede dentro
+			// del rango del turno.
+			if (s.multiDay) return true;
+			return s.breakStartTime >= s.startTime && s.breakEndTime <= s.endTime;
+		},
+		{message: "El descanso debe quedar dentro del rango del turno"},
+	);
+
+const weeklyPatternSchema = z.object({
+	monday: dayShiftSchema.nullable(),
+	tuesday: dayShiftSchema.nullable(),
+	wednesday: dayShiftSchema.nullable(),
+	thursday: dayShiftSchema.nullable(),
+	friday: dayShiftSchema.nullable(),
+	saturday: dayShiftSchema.nullable(),
+	sunday: dayShiftSchema.nullable(),
+});
+
+const workScheduleModeSchema = z.enum(["fixed", "task_based"]);
+
+const workScheduleSchema = z
+	.object({
+		mode: workScheduleModeSchema.default("fixed"),
+		jornadaType: jornadaTypeSchema,
+		templateId: z.string().length(24).nullable().optional(),
+		customPattern: weeklyPatternSchema.nullable().optional(),
+		weeklyMaxHours: z.number().min(1).max(80),
+		restDays: z.array(dayOfWeekSchema).default([]),
+		effectiveFrom: z.coerce.date(),
+		effectiveTo: z.coerce.date().nullable().optional(),
+	})
+	.refine(
+		(s) => {
+			// Para task_based no se requiere patrón.
+			if (s.mode === "task_based") return true;
+			return !!(s.templateId || s.customPattern);
+		},
+		{message: "mode='fixed' requiere templateId o customPattern"},
+	);
+
+export const generateScheduleAssignmentsSchema = z.object({
+	params: z.object({id: z.string().length(24)}),
+	body: z
+		.object({
+			from: z.coerce.date(),
+			to: z.coerce.date(),
+		})
+		.refine((d) => d.from <= d.to, {
+			message: "from debe ser <= to",
+		}),
+});
+
 // ── Employee profile patch ─────────────────────────────────────────────────
 
 export const updateEmployeeProfileSchema = z.object({
@@ -241,6 +349,7 @@ export const updateEmployeeProfileSchema = z.object({
 		address: addressSchema.nullable().optional(),
 		currentAddress: currentAddressSchema.optional(),
 		vehicleOperator: vehicleOperatorSchema.nullable().optional(),
+		workSchedule: workScheduleSchema.nullable().optional(),
 	}),
 } );
 

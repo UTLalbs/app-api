@@ -101,6 +101,9 @@ const certificationSchema = z.object({
 
 const employeeProfileSchema = z.object({
 	isEmployee: z.boolean().default(false),
+	employmentStatus: z
+		.enum(["active", "leave", "vacation", "disability", "suspended", "terminated"])
+		.optional(),
 	position: z.string().default(""),
 	department: z.string().default(""),
 	dateOfHire: z.coerce.date().optional(),

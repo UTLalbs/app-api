@@ -7,6 +7,7 @@ import {
 	listEmployees,
 	getEmployee,
 	editEmployeeProfile,
+	generateAssignmentsFromWorkSchedule,
 	addContact,
 	editContact,
 	deleteContact,
@@ -108,14 +109,34 @@ export const getEmployeeById = asyncHandler(
 export const updateProfile = asyncHandler(
 	async (req: Request & UpdateEmployeeProfileInput, res: Response) => {
 		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
-		const updated = await editEmployeeProfile(
+		const {user, warnings} = await editEmployeeProfile(
 			String(req.params.id),
 			orgId,
 			req.body as unknown as Partial<EmployeeProfileDocument>, // ← cast
 			req.user!.id,
 			buildAuditContext(req),
 		);
-		res.json({success: true, data: updated.employeeProfile});
+		res.json({
+			success: true,
+			data: user.employeeProfile,
+			...(warnings.length > 0 ? {warnings} : {}),
+		});
+	},
+);
+
+// ── POST /api/v1/employees/:id/schedule/generate ───────────────────────────
+
+export const generateScheduleAssignments = asyncHandler(
+	async (req: Request, res: Response) => {
+		const orgId = req.user!.impersonating?.orgId ?? req.user!.orgId ?? "";
+		const result = await generateAssignmentsFromWorkSchedule(
+			String(req.params.id),
+			orgId,
+			req.body.from as Date,
+			req.body.to as Date,
+			buildAuditContext(req),
+		);
+		res.json({success: true, data: result});
 	},
 );
 

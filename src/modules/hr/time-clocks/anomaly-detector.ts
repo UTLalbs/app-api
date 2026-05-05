@@ -10,6 +10,17 @@ import {
   combineDateAndTimeInTimezone,
   formatMinutesAsHours,
 } from './overtime.helpers';
+
+// "10 km 211 m" / "245 m" — descomposición km+m para distancias donde importan
+// los metros (geofence). Mantenido inline para no agregar dependencias entre
+// módulos backend; el frontend tiene su versión equivalente.
+function formatDistanceKmM(meters: number): string {
+  const m = Math.round(meters);
+  if (m < 1000) return `${m} m`;
+  const km = Math.floor(m / 1000);
+  const rem = m - km * 1000;
+  return rem === 0 ? `${km} km` : `${km} km ${rem} m`;
+}
 import type {
   ServiceVisitSummaryDocument,
   ShiftSummary,
@@ -188,7 +199,7 @@ export function detectAnomalies(
         _id: new ObjectId(),
         type: 'out_of_geofence',
         severity: 'warning',
-        description: `Fichaje a ${distance}m de la ubicación esperada`,
+        description: `Fichaje a ${formatDistanceKmM(distance)} de la ubicación esperada`,
         affectsRole: ['rrhh'],
         affectedEventId: event._id,
         affectedLocationId: event.expectedLocationId,

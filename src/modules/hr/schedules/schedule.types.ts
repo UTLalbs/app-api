@@ -76,6 +76,10 @@ export interface WorkPeriodDocument {
 
   applyAutoBreak: boolean;
   breakDurationMinutes: number;
+  // Ventana explícita de descanso (opcional). Si ambos están definidos,
+  // posicionan el break dentro de [startTime, endTime].
+  breakStartTime: string | null;
+  breakEndTime: string | null;
 
   coveringForUserId: ObjectId | null;
   coverageReason: string | null;
@@ -103,6 +107,8 @@ export interface WorkPeriod {
 
   applyAutoBreak: boolean;
   breakDurationMinutes: number;
+  breakStartTime: string | null;
+  breakEndTime: string | null;
 
   coveringForUserId: string | null;
   coverageReason: string | null;
@@ -300,6 +306,8 @@ export interface WorkPeriodDto {
   serviceCommitments: ServiceCommitmentDto[];
   applyAutoBreak: boolean;
   breakDurationMinutes: number;
+  breakStartTime: string | null;
+  breakEndTime: string | null;
   coveringForUserId: string | null;
   coverageReason: string | null;
   notes: string | null;

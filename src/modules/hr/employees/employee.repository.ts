@@ -13,14 +13,21 @@ import type {
 	BankAccount,
 	ChecklistItem,
 	ChecklistStatus,
+	DayOfWeek,
+	DayShiftDocument,
+	DayShift,
 	DocumentStatus,
 	EmergencyContact,
 	EmployeeDocument,
 	EmployeeQueryFilter,
+	EmployeeWorkSchedule,
+	EmployeeWorkScheduleDocument,
 	RenewalFrom,
 	ChecklistItemDto,
 	EmployeeProfileDocument,
 	EmploymentStatus,
+	WeeklyPattern,
+	WeeklyPatternDocument,
 } from "./employee.types";
 
 // ── Proyección base para employees ────────────────────────────────────────
@@ -62,6 +69,7 @@ const EMPLOYEE_PROJECTION = {
 	"employeeProfile.vehicleOperator": 1, // ← agregar explícitamente
 	"employeeProfile.documents": 1,
 	"employeeProfile.checklist": 1,
+	"employeeProfile.workSchedule": 1,
 	// bankAccounts — solo campos seguros
 	"employeeProfile.bankAccounts._id": 1,
 	"employeeProfile.bankAccounts.bankName": 1,
@@ -174,6 +182,75 @@ function normalizeVehicleOperator<T extends {licenses?: unknown[]} | null | unde
 	} as T;
 }
 
+// Convierte el subdocumento de workSchedule (Document, con ObjectIds) al
+// shape de dominio (strings) que se entrega al frontend.
+//
+// Defensivo: el campo puede llegar como ObjectId o string dependiendo de la
+// ruta de escritura — la PATCH viene del validator Zod como string y se
+// persiste tal cual; futuras escrituras desde código pueden traer ObjectId.
+function idToHex(value: unknown): string | null {
+	if (!value) return null;
+	if (typeof value === "string") return value;
+	if (value instanceof ObjectId) return value.toHexString();
+	// Edge case: BSON deserializa ObjectId-like a un objeto con toHexString().
+	if (
+		typeof (value as {toHexString?: () => string}).toHexString === "function"
+	) {
+		return (value as {toHexString: () => string}).toHexString();
+	}
+	return String(value);
+}
+
+function toEmployeeWorkSchedule(
+	doc: EmployeeWorkScheduleDocument | null,
+): EmployeeWorkSchedule | null {
+	if (!doc) return null;
+
+	const days: DayOfWeek[] = [
+		"monday",
+		"tuesday",
+		"wednesday",
+		"thursday",
+		"friday",
+		"saturday",
+		"sunday",
+	];
+
+	const customPattern: WeeklyPattern | null = doc.customPattern
+		? (Object.fromEntries(
+				days.map((day) => {
+					const shift = (doc.customPattern as WeeklyPatternDocument)[day];
+					return [
+						day,
+						shift
+							? ({
+									...shift,
+									startLocationId: idToHex(shift.startLocationId),
+									endLocationId: idToHex(shift.endLocationId),
+									// Defensivo: docs viejos pueden no tener estos campos.
+									breakStartTime: shift.breakStartTime ?? null,
+									breakEndTime: shift.breakEndTime ?? null,
+								} as DayShift)
+							: null,
+					];
+				}),
+			) as WeeklyPattern)
+		: null;
+
+	return {
+		mode: doc.mode ?? "fixed",
+		jornadaType: doc.jornadaType,
+		templateId: idToHex(doc.templateId),
+		customPattern,
+		weeklyMaxHours: doc.weeklyMaxHours,
+		restDays: doc.restDays,
+		effectiveFrom: doc.effectiveFrom,
+		effectiveTo: doc.effectiveTo,
+		createdAt: doc.createdAt,
+		updatedAt: doc.updatedAt,
+	};
+}
+
 async function toUser(doc: UserDocument): Promise<User> {
 	const ep = doc.employeeProfile;
 
@@ -214,6 +291,7 @@ async function toUser(doc: UserDocument): Promise<User> {
 						sameAsFiscal: true,
 						address: null,
 					},
+					workSchedule: toEmployeeWorkSchedule(ep.workSchedule ?? null),
 				}
 			: null,
 		clientMemberships: doc.clientMemberships

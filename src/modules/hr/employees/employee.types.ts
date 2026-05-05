@@ -1,5 +1,7 @@
 import type {ObjectId} from "mongodb";
 
+import type {ShiftType} from "../schedules/schedule.types";
+
 // ── Enums ──────────────────────────────────────────────────────────────────
 //
 // `position` y `department` eran enums fijos; ahora son `string` (keys del
@@ -311,14 +313,16 @@ export interface EmployeeProfileDocument {
 	vehicleOperator: VehicleOperator | null;
 	documents: EmployeeDocument[];
 	checklist: ChecklistItem[]; // ← ObjectId
+	workSchedule: EmployeeWorkScheduleDocument | null;
 }
 
 // ── Domain — para response al frontend ────────────────────────────────────
 export interface EmployeeProfile extends Omit<
 	EmployeeProfileDocument,
-	"checklist"
+	"checklist" | "workSchedule"
 > {
 	checklist: ChecklistItemDto[]; // ← strings + populated
+	workSchedule: EmployeeWorkSchedule | null;
 }
 
 // ── Address ────────────────────────────────────────────────────────────────
@@ -350,6 +354,90 @@ export interface ChecklistTemplate {
 	required: boolean;
 	hasExpiry: boolean;
 	hasRenewal: boolean;
+}
+
+// ── Work Schedule (patrón base del empleado) ───────────────────────────────
+//
+// Representa el horario laboral recurrente del empleado. Es la fuente de la
+// que se materializan los `ScheduleAssignment` diarios vía el endpoint
+// `POST /:id/schedule/generate`. Permite capturar al alta del empleado un
+// patrón estable (manual o vía plantilla) en vez de asignar día a día.
+
+export type JornadaType =
+	| "diurna"      // 06-20h, máx 8h/día, 48h/sem (LFT art. 61)
+	| "nocturna"    // 20-06h, máx 7h/día, 42h/sem (LFT art. 61)
+	| "mixta"       // mezcla, ≤3.5h nocturnas, máx 7.5h/día, 45h/sem (LFT art. 60)
+	| "acumulada"   // 12x24, 24x48 (vigilantes, choferes locales — LFT art. 59)
+	| "por_viaje";  // operador federal — sujeto a NOM-087-SCT-2-2017
+
+export type WorkScheduleMode =
+	| "fixed"        // patrón semanal materializable; aparece en calendario
+	| "task_based";  // sin programación; el time-clocks es la fuente de verdad
+	                 // (operador por flete/servicio, técnico rotativo, comisionista)
+
+export type DayOfWeek =
+	| "monday"
+	| "tuesday"
+	| "wednesday"
+	| "thursday"
+	| "friday"
+	| "saturday"
+	| "sunday";
+
+export interface DayShiftDocument {
+	shiftType: ShiftType;
+	startTime: string; // 'HH:MM'
+	endTime: string; // 'HH:MM'
+	multiDay: boolean;
+	endDayOffset: number;
+	startLocationId: ObjectId | null;
+	endLocationId: ObjectId | null;
+	applyAutoBreak: boolean;
+	breakDurationMinutes: number;
+	// Ventana explícita de descanso. Si ambos están definidos, posicionan el
+	// break dentro de [startTime, endTime]; si null, el break es implícito
+	// (solo duración) y compatible con turnos viejos.
+	breakStartTime: string | null;
+	breakEndTime: string | null;
+	notes: string | null;
+}
+
+export type WeeklyPatternDocument = {
+	[day in DayOfWeek]: DayShiftDocument | null;
+};
+
+export interface EmployeeWorkScheduleDocument {
+	mode: WorkScheduleMode;
+	jornadaType: JornadaType;
+
+	// Origen del patrón — solo si mode === 'fixed'. Para 'task_based' ambos null.
+	templateId: ObjectId | null;
+	customPattern: WeeklyPatternDocument | null;
+
+	weeklyMaxHours: number;
+	restDays: DayOfWeek[];
+
+	effectiveFrom: Date;
+	effectiveTo: Date | null;
+
+	createdAt: Date;
+	updatedAt: Date;
+}
+
+// ── Domain (response al frontend) ──────────────────────────────────────────
+
+export interface DayShift
+	extends Omit<DayShiftDocument, "startLocationId" | "endLocationId"> {
+	startLocationId: string | null;
+	endLocationId: string | null;
+}
+
+export type WeeklyPattern = {[day in DayOfWeek]: DayShift | null};
+
+export interface EmployeeWorkSchedule
+	extends Omit<EmployeeWorkScheduleDocument, "templateId" | "customPattern"> {
+	templateId: string | null;
+	customPattern: WeeklyPattern | null;
 }
 
 // ── Query Filter ───────────────────────────────────────────────────────────

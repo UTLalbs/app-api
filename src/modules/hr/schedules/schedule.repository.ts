@@ -1,5 +1,8 @@
 import { ObjectId, type Filter } from 'mongodb';
 
+import { ValidationError } from '../../../shared/errors/AppError';
+import { getUserCollection } from '../../users/user.model';
+
 import {
   getScheduleAssignmentCollection,
   getScheduleTemplateCollection,
@@ -78,6 +81,8 @@ function toWorkPeriod(
     ),
     applyAutoBreak: doc.applyAutoBreak,
     breakDurationMinutes: doc.breakDurationMinutes,
+    breakStartTime: doc.breakStartTime ?? null,
+    breakEndTime: doc.breakEndTime ?? null,
     coveringForUserId: doc.coveringForUserId
       ? doc.coveringForUserId.toHexString()
       : null,
@@ -444,6 +449,29 @@ export async function createAssignment(
 ): Promise<ScheduleAssignmentDocument> {
   const now = new Date();
 
+  // Hardening: garantizar que el userId existe + es empleado del org antes
+  // de persistir. Previene que un caller (auto-materialize, manual override,
+  // testing) cree Assignments huérfanos referenciando users borrados o de
+  // otro org. Si en algún punto se borra el user después, los Assignments
+  // viejos quedan huérfanos — eso lo limpia el script cleanup:tc-orphans.
+  if (!ObjectId.isValid(dto.userId) || !ObjectId.isValid(dto.orgId)) {
+    throw new ValidationError('userId u orgId inválido al crear Assignment');
+  }
+  const userExists = await getUserCollection().findOne(
+    {
+      _id: new ObjectId(dto.userId),
+      orgId: new ObjectId(dto.orgId),
+      deletedAt: null,
+      'employeeProfile.isEmployee': true,
+    },
+    { projection: { _id: 1 } },
+  );
+  if (!userExists) {
+    throw new ValidationError(
+      `No se puede crear Assignment: el usuario ${dto.userId} no existe o no es empleado de este org`,
+    );
+  }
+
   const doc: Omit<ScheduleAssignmentDocument, '_id'> = {
     orgId: new ObjectId(dto.orgId),
     userId: new ObjectId(dto.userId),
@@ -474,6 +502,8 @@ export async function createAssignment(
       })),
       applyAutoBreak: p.applyAutoBreak,
       breakDurationMinutes: p.breakDurationMinutes,
+      breakStartTime: p.breakStartTime ?? null,
+      breakEndTime: p.breakEndTime ?? null,
       coveringForUserId: p.coveringForUserId
         ? new ObjectId(p.coveringForUserId)
         : null,
@@ -563,6 +593,8 @@ export async function updateAssignment(
       })),
       applyAutoBreak: p.applyAutoBreak,
       breakDurationMinutes: p.breakDurationMinutes,
+      breakStartTime: p.breakStartTime ?? null,
+      breakEndTime: p.breakEndTime ?? null,
       coveringForUserId: p.coveringForUserId
         ? new ObjectId(p.coveringForUserId)
         : null,

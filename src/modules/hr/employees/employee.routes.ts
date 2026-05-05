@@ -10,6 +10,7 @@ import
   getEmployees,
   getEmployeeById,
   updateProfile,
+  generateScheduleAssignments,
   createEmergencyContact,
   updateEmergencyContact,
   deleteEmergencyContact,
@@ -31,6 +32,7 @@ import {
   listEmployeesSchema,
   employeeIdParamSchema,
   updateEmployeeProfileSchema,
+  generateScheduleAssignmentsSchema,
   createEmergencyContactSchema,
   updateEmergencyContactSchema,
   contactIdParamSchema,
@@ -114,6 +116,15 @@ employeeRouter.patch(
   validate(updateEmploymentStatusSchema),
   authorize('employees', 'update'),
   updateEmploymentStatus,
+);
+
+// ── Schedule (workSchedule del empleado → ScheduleAssignment diarios) ─────
+
+employeeRouter.post(
+  '/:id/schedule/generate',
+  validate(generateScheduleAssignmentsSchema),
+  authorize('schedules', 'edit_shifts'),
+  generateScheduleAssignments,
 );
 
 // ── Bank Accounts ──────────────────────────────────────────────────────────

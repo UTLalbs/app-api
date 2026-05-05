@@ -149,6 +149,22 @@ export async function registerUser(
     throw new ForbiddenError('Email is already registered');
   }
 
+  // Guard RH-002: solo un super_admin operando fuera de impersonación puede
+  // crear otros super_admin. Una organización (incluso bajo impersonación de
+  // un super_admin) NO puede crear super_admins — son de scope plataforma.
+  if (dto.userType === 'super_admin') {
+    if (context.actor?.userType !== 'super_admin') {
+      throw new ForbiddenError(
+        'Solo un super_admin puede crear otro super_admin',
+      );
+    }
+    if (context.impersonating) {
+      throw new ForbiddenError(
+        'No se puede crear un super_admin desde el contexto de una organización',
+      );
+    }
+  }
+
   await assertCanAssignRoles(
     context.actor?.userType,
     (dto.roles ?? []).map((r) => r.roleId),
@@ -188,6 +204,24 @@ export async function editUser(
       context.actor?.userType,
       dto.roles.map((r) => r.roleId),
     );
+  }
+
+  // Promoción a empleado vía PATCH /users/:id: si se está marcando isEmployee=true
+  // por primera vez y no se especifica employmentStatus, default a 'active'. Sin
+  // esto el doc queda con employmentStatus=undefined y findAllEmployees lo excluye.
+  // Mismo defaulting que employee.service.updateEmployeeProfile.
+  const wasEmployeeBefore = existing.employeeProfile?.isEmployee ?? false;
+  const isBeingPromoted =
+    !wasEmployeeBefore && dto.employeeProfile?.isEmployee === true;
+  if (
+    isBeingPromoted &&
+    !dto.employeeProfile?.employmentStatus &&
+    !existing.employeeProfile?.employmentStatus
+  ) {
+    dto.employeeProfile = {
+      ...dto.employeeProfile,
+      employmentStatus: 'active',
+    };
   }
 
   const updated = await updateUser(id, orgId, dto);

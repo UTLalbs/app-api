@@ -22,6 +22,8 @@ import type {
 } from '../schedules/schedule.types';
 
 import { detectAnomalies } from './anomaly-detector';
+import { materializeAllForRange } from './materialize.helpers';
+import { localDayUtcRange, workDateInTimezone } from './overtime.helpers';
 import {
   buildShiftSummary,
   combineDateAndTimeInTimezone,
@@ -129,6 +131,14 @@ export async function listTimeClockDays(
       ? endOfUtcDay(filter.shiftDate)
       : endOfUtcDay(new Date());
 
+  // Materializar Assignments faltantes desde workSchedule de cada empleado
+  // en el rango. Sin esto, "Sin fichar" no muestra empleados con horario base
+  // que aún no han fichaje'd ni abierto su app. Idempotente (skip si existe).
+  await materializeAllForRange(orgId, rangeStart, rangeEnd, {
+    id: user.id,
+    displayName: user.displayName,
+  });
+
   // Pre-genera days para schedules sin fichaje todavía. Idempotente.
   await ensureDaysForRange(new ObjectId(orgId), rangeStart, rangeEnd);
 
@@ -184,7 +194,10 @@ async function loadEmployee(
   orgId: ObjectId,
   userId: ObjectId,
 ): Promise<EmployeeMeta | null> {
-  const doc = await getUserCollection().findOne(
+  // Estricto: empleado activo en este org. Si falla, intentamos un fallback
+  // relajado (sin deletedAt) para recuperar al menos el displayName cuando
+  // un Day record referencia un usuario soft-deleted o despromovido.
+  let doc = await getUserCollection().findOne(
     { _id: userId, orgId, deletedAt: null },
     {
       projection: {
@@ -195,6 +208,19 @@ async function loadEmployee(
       },
     },
   );
+  if (!doc) {
+    doc = await getUserCollection().findOne(
+      { _id: userId, orgId },
+      {
+        projection: {
+          _id: 1,
+          displayName: 1,
+          'employeeProfile.position': 1,
+          'employeeProfile.managerId': 1,
+        },
+      },
+    );
+  }
   if (!doc) return null;
   const rawManagerId = doc.employeeProfile?.managerId;
   const managerId =
@@ -343,26 +369,46 @@ export async function recalculateDay(
   userId: ObjectId,
   date: Date,
 ): Promise<TimeClockDayDocument> {
-  const dayStart = startOfUtcDay(date);
-  const dayEnd = endOfUtcDay(date);
   const now = new Date();
 
   // Timezone de la org — necesaria para reconstruir los horarios esperados
   // del schedule ("07:00" wall clock → instante UTC respetando UTC-6/UTC-5).
   const orgTimezone = await getOrgTimezone(orgId.toHexString());
 
+  // El parámetro `date` puede venir como:
+  //   (a) un workDate (UTC-midnight que representa un día local)  — desde
+  //       ensureDaysForRange iterando schedules.workDate.
+  //   (b) un instante real (ej. clockedAt de un evento) — desde registerEvent.
+  // Si `date` ya es UTC-midnight, lo respetamos (caso a). Si tiene hora,
+  // calculamos el workDate del día local que lo contiene (caso b).
+  const isAlreadyWorkDate =
+    date.getUTCHours() === 0 &&
+    date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 &&
+    date.getUTCMilliseconds() === 0;
+  const dayStart = isAlreadyWorkDate
+    ? date
+    : workDateInTimezone(date, orgTimezone);
+  const { start: localStart, end: localEnd } = localDayUtcRange(dayStart, orgTimezone);
+  const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60_000 - 1);
+
   const employee = await loadEmployee(orgId, userId);
 
   // 1. Eventos del día (excluyendo los marcados isExcluded).
+  // Filtramos por el rango de instantes UTC que caen en el día local —
+  // un evento a las 6:30 PM Mexico (00:30 UTC del día siguiente) pertenece
+  // al workDate de Mexico, no al UTC del clockedAt.
   const events = await findEventsByUserInRange(
     orgId.toHexString(),
     userId.toHexString(),
-    dayStart,
-    dayEnd,
+    localStart,
+    localEnd,
     { includeExcluded: false },
   );
 
   // 2. Schedule del día (puede haber 0, 1 o varios — tomamos el primero).
+  // Schedules se persisten con workDate UTC-midnight, así que el rango
+  // [dayStart, dayEnd] sobre UTC es lo correcto aquí.
   const schedules = await findAssignmentsByUserInRange(
     orgId.toHexString(),
     userId.toHexString(),

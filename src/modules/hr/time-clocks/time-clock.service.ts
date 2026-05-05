@@ -26,6 +26,7 @@ import type {
 } from '../schedules/schedule.types';
 
 import { computeGeofenceStatus } from './geofence.helpers';
+import { tryMaterializeFromWorkSchedule } from './materialize.helpers';
 import {
   combineDateAndTimeInTimezone,
   endOfUtcDay,
@@ -311,7 +312,18 @@ export async function registerEvent(
     );
   }
 
-  // 5. Resolver schedule y period (estrategia A+B).
+  // 5. Auto-materializar Assignment desde workSchedule si no existe (paso A0).
+  //    Esto permite que el calendario muestre la jornada virtual y que el
+  //    fichaje quede asociado a un Assignment real sin intervención manual.
+  await tryMaterializeFromWorkSchedule(
+    orgId,
+    input.userId,
+    eventDate,
+    employee,
+    { id: context.actor.id, displayName: context.actor.displayName },
+  );
+
+  // 6. Resolver schedule y period (estrategia A+B).
   const { schedule, period } = await resolveScheduleForEvent(
     orgId,
     input.userId,
@@ -624,8 +636,24 @@ export async function getMyClockStatus(
 ): Promise<MyClockStatus> {
   const userId = new ObjectId(user.id);
 
-  // 1. Schedule del día.
+  // 0. Auto-materializar Assignment desde workSchedule si no existe.
+  //    Esto permite que el modal de fichaje muestre el turno virtual
+  //    como real antes de que el usuario haga clock-in.
   const today = new Date();
+  try {
+    const employee = await loadEmployeeOrThrow(orgId, user.id);
+    await tryMaterializeFromWorkSchedule(
+      orgId,
+      user.id,
+      today,
+      employee,
+      { id: user.id, displayName: user.displayName },
+    );
+  } catch {
+    // Si el usuario no es empleado o falla, continuamos sin schedule.
+  }
+
+  // 1. Schedule del día.
   const dayStart = startOfUtcDay(today);
   const dayEnd = endOfUtcDay(today);
   const schedules = await findAssignmentsByUserInRange(

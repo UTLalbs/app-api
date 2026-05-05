@@ -13,13 +13,27 @@ import {
 	buildScopeFilter,
 	invalidateTeamHierarchyCache,
 } from "../../../middleware/scope";
-import {NotFoundError, ForbiddenError} from "../../../shared/errors/AppError";
+import {
+	NotFoundError,
+	ForbiddenError,
+	ValidationError,
+} from "../../../shared/errors/AppError";
 import {computeDiff} from "../../../shared/utils/diff";
 import type {AuthenticatedUser} from "../../auth/auth.types";
 import {emitAuditEvent} from "../../audit/audit.service";
 import type {AuditContext} from "../../audit/audit.types";
 import type {User} from "../../users/user.types";
 import {findDocumentProfileById} from "../document-profiles/document-profile.repository";
+import {normalizeWorkDate} from "../schedules/schedule.helpers";
+import {
+	createAssignment,
+	findAssignmentsByUserAndDate,
+	findTemplateById,
+} from "../schedules/schedule.repository";
+import type {
+	ScheduleTemplate,
+	WorkPeriodDto,
+} from "../schedules/schedule.types";
 
 import {buildChecklist} from "./employee.checklist";
 import {
@@ -44,16 +58,61 @@ import {
 import type {
 	BankAccount,
 	ChecklistStatus,
+	DayOfWeek,
+	DayShiftDocument,
 	DocumentStatus,
 	DocumentType,
 	EmergencyContact,
 	EmployeeDocument,
 	EmployeeProfileDocument,
 	EmployeeQueryFilter,
+	EmployeeWorkScheduleDocument,
 	EmploymentStatus,
 	RenewalFrom,
 	WaivedReason,
+	WeeklyPatternDocument,
 } from "./employee.types";
+import {
+	validateWorkSchedule,
+	type ScheduleWarning,
+} from "./workSchedule.helpers";
+
+// ── Helpers internos para workSchedule ─────────────────────────────────────
+
+function toObjectIdOrNull(value: unknown): ObjectId | null {
+	if (!value) return null;
+	if (value instanceof ObjectId) return value;
+	if (typeof value === "string" && ObjectId.isValid(value)) return new ObjectId(value);
+	return null;
+}
+
+function convertPatternIdsToObjectIds(
+	pattern: WeeklyPatternDocument,
+): WeeklyPatternDocument {
+	const days: DayOfWeek[] = [
+		"monday",
+		"tuesday",
+		"wednesday",
+		"thursday",
+		"friday",
+		"saturday",
+		"sunday",
+	];
+	return Object.fromEntries(
+		days.map((day) => {
+			const shift = pattern[day];
+			if (!shift) return [day, null];
+			return [
+				day,
+				{
+					...shift,
+					startLocationId: toObjectIdOrNull(shift.startLocationId),
+					endLocationId: toObjectIdOrNull(shift.endLocationId),
+				} as DayShiftDocument,
+			];
+		}),
+	) as WeeklyPatternDocument;
+}
 
 // ── Listar empleados ───────────────────────────────────────────────────────
 //
@@ -110,9 +169,11 @@ export async function editEmployeeProfile(
 	fields: Partial<EmployeeProfileDocument>,
 	_actorId: string,
 	context?: AuditContext,
-): Promise<User> {
+): Promise<{user: User; warnings: ScheduleWarning[]}> {
 	const existing = await findEmployeeById(id, orgId);
 	if ( !existing ) throw new NotFoundError( "Employee" );
+
+	const warnings: ScheduleWarning[] = [];
 
 	// Capturar managerId previo para invalidar caches de jerarquía
 	// si cambia (afecta al empleado, al manager anterior y al nuevo).
@@ -153,6 +214,29 @@ export async function editEmployeeProfile(
 		!existing.employeeProfile?.employmentStatus
 	) {
 		fields.employmentStatus = "active";
+	}
+
+	// Si viene workSchedule, validar contra LFT/NOM-087 (D4=advertir, no bloquea),
+	// convertir IDs a ObjectId para persistencia y sellar timestamps.
+	if (fields.workSchedule) {
+		const lintResults = validateWorkSchedule(fields.workSchedule);
+		warnings.push(...lintResults);
+		if (lintResults.length > 0) {
+			logger.warn(
+				{employeeId: id, warnings: lintResults},
+				"workSchedule guardado con advertencias legales",
+			);
+		}
+		const previousSchedule = existing.employeeProfile?.workSchedule ?? null;
+		fields.workSchedule = {
+			...fields.workSchedule,
+			templateId: toObjectIdOrNull(fields.workSchedule.templateId),
+			customPattern: fields.workSchedule.customPattern
+				? convertPatternIdsToObjectIds(fields.workSchedule.customPattern)
+				: null,
+			createdAt: previousSchedule?.createdAt ?? new Date(),
+			updatedAt: new Date(),
+		};
 	}
 
 	// Si viene employmentStatus → sincronizar User.status y deletedAt
@@ -240,7 +324,299 @@ export async function editEmployeeProfile(
 		}
 	}
 
-	return final;
+	return {user: final, warnings};
+}
+
+// ── Generar Schedule Assignments desde el patrón base ──────────────────────
+//
+// Materializa el `workSchedule` del empleado en `ScheduleAssignment` diarios
+// para el rango [from, to]. Días sin turno o en `restDays` se omiten. Si ya
+// existe cualquier assignment activo para (userId, fecha), se respeta — el
+// usuario debe borrar el existente si quiere regenerar.
+
+const DAYS_OF_WEEK: DayOfWeek[] = [
+	"monday",
+	"tuesday",
+	"wednesday",
+	"thursday",
+	"friday",
+	"saturday",
+	"sunday",
+];
+
+// JS Date.getUTCDay(): 0=domingo, 1=lunes, ... 6=sábado.
+const JS_DAY_TO_NAME: Record<number, DayOfWeek> = {
+	0: "sunday",
+	1: "monday",
+	2: "tuesday",
+	3: "wednesday",
+	4: "thursday",
+	5: "friday",
+	6: "saturday",
+};
+
+// Hidrata el patrón semanal: si hay customPattern lo usa tal cual; si solo hay
+// templateId, replica el shift del template a cada día NO incluido en restDays.
+function hydratePattern(
+	workSchedule: EmployeeWorkScheduleDocument,
+	template: ScheduleTemplate | null,
+): WeeklyPatternDocument | null {
+	if (workSchedule.customPattern) return workSchedule.customPattern;
+	if (!template) return null;
+
+	const sharedShift: DayShiftDocument = {
+		shiftType: template.shiftType,
+		startTime: template.defaultStartTime,
+		endTime: template.defaultEndTime,
+		multiDay: template.shiftType === "multi_day",
+		endDayOffset: template.shiftType === "multi_day" ? 1 : 0,
+		startLocationId: template.defaultStartLocationId
+			? new ObjectId(template.defaultStartLocationId)
+			: null,
+		endLocationId: template.defaultEndLocationId
+			? new ObjectId(template.defaultEndLocationId)
+			: template.defaultStartLocationId
+				? new ObjectId(template.defaultStartLocationId)
+				: null,
+		applyAutoBreak: template.applyAutoBreak,
+		breakDurationMinutes: template.breakDurationMinutes,
+		breakStartTime: null,
+		breakEndTime: null,
+		notes: null,
+	};
+
+	const pattern: WeeklyPatternDocument = {
+		monday: null,
+		tuesday: null,
+		wednesday: null,
+		thursday: null,
+		friday: null,
+		saturday: null,
+		sunday: null,
+	};
+	for (const day of DAYS_OF_WEEK) {
+		if (!workSchedule.restDays.includes(day)) pattern[day] = sharedShift;
+	}
+	return pattern;
+}
+
+// Defensivo: el campo puede llegar como ObjectId o string según la ruta de
+// escritura (validator persiste strings; escrituras nuevas usan ObjectId).
+function locIdToHex(value: unknown): string | null {
+	if (!value) return null;
+	if (typeof value === "string") return value;
+	if (value instanceof ObjectId) return value.toHexString();
+	if (typeof (value as {toHexString?: () => string}).toHexString === "function") {
+		return (value as {toHexString: () => string}).toHexString();
+	}
+	return String(value);
+}
+
+export function dayShiftToWorkPeriodDto(
+	shift: DayShiftDocument,
+): WorkPeriodDto | null {
+	const startId = locIdToHex(shift.startLocationId);
+	const endId = locIdToHex(shift.endLocationId);
+	if (!startId || !endId) return null;
+	return {
+		shiftType: shift.shiftType,
+		startTime: shift.startTime,
+		endTime: shift.endTime,
+		multiDay: shift.multiDay,
+		endDayOffset: shift.endDayOffset,
+		expectedDurationDays: shift.multiDay ? Math.max(shift.endDayOffset, 1) : null,
+		startLocationId: startId,
+		endLocationId: endId,
+		serviceCommitments: [],
+		applyAutoBreak: shift.applyAutoBreak,
+		breakDurationMinutes: shift.breakDurationMinutes,
+		breakStartTime: shift.breakStartTime ?? null,
+		breakEndTime: shift.breakEndTime ?? null,
+		coveringForUserId: null,
+		coverageReason: null,
+		notes: shift.notes,
+	};
+}
+
+interface GenerateResult {
+	created: number;
+	skipped: number;
+	errors: {date: string; reason: string}[];
+	warnings: ScheduleWarning[];
+}
+
+export async function generateAssignmentsFromWorkSchedule(
+	employeeId: string,
+	orgId: string,
+	from: Date,
+	to: Date,
+	context: AuditContext,
+): Promise<GenerateResult> {
+	if (!context.actor) {
+		throw new ForbiddenError("Actor required to generate schedule assignments");
+	}
+
+	const employee = await findEmployeeById(employeeId, orgId);
+	if (!employee) throw new NotFoundError("Employee");
+	if (!employee.employeeProfile?.isEmployee) {
+		throw new ValidationError("El usuario no es empleado");
+	}
+
+	// El profile leído por findEmployeeById es el dominio (ObjectIds → strings).
+	// Reconstruimos la versión Document para uso interno.
+	const profile = employee.employeeProfile;
+	if (!profile.workSchedule) {
+		throw new ValidationError(
+			"El empleado no tiene un horario base configurado (workSchedule).",
+		);
+	}
+
+	const ws = profile.workSchedule;
+
+	// Modo task_based: el empleado no tiene horario programado. No-op idempotente.
+	if (ws.mode === "task_based") {
+		return {created: 0, skipped: 0, errors: [], warnings: []};
+	}
+
+	// `findEmployeeById` devuelve domain (`EmployeeWorkSchedule`). Convertir
+	// a Document re-creando ObjectIds donde aplica para reutilizar las helpers.
+	const wsDoc: EmployeeWorkScheduleDocument = {
+		mode: ws.mode,
+		jornadaType: ws.jornadaType,
+		templateId: ws.templateId ? new ObjectId(ws.templateId) : null,
+		customPattern: ws.customPattern
+			? (Object.fromEntries(
+					DAYS_OF_WEEK.map((day) => {
+						const shift = ws.customPattern![day];
+						return [
+							day,
+							shift
+								? ({
+										...shift,
+										startLocationId: shift.startLocationId
+											? new ObjectId(shift.startLocationId)
+											: null,
+										endLocationId: shift.endLocationId
+											? new ObjectId(shift.endLocationId)
+											: null,
+									} as DayShiftDocument)
+								: null,
+						];
+					}),
+				) as WeeklyPatternDocument)
+			: null,
+		weeklyMaxHours: ws.weeklyMaxHours,
+		restDays: ws.restDays,
+		effectiveFrom: ws.effectiveFrom,
+		effectiveTo: ws.effectiveTo,
+		createdAt: ws.createdAt,
+		updatedAt: ws.updatedAt,
+	};
+
+	// Validaciones legales (informativas — no bloquean).
+	const warnings = validateWorkSchedule(wsDoc);
+
+	// Hidratar pattern desde template si es necesario.
+	const template = wsDoc.templateId
+		? await findTemplateById(wsDoc.templateId.toHexString(), orgId)
+		: null;
+	const pattern = hydratePattern(wsDoc, template);
+	if (!pattern) {
+		throw new ValidationError(
+			"workSchedule sin patrón hidratable: template no existe o no tiene defaults.",
+		);
+	}
+
+	const result: GenerateResult = {
+		created: 0,
+		skipped: 0,
+		errors: [],
+		warnings,
+	};
+
+	const cursor = new Date(normalizeWorkDate(from));
+	const end = new Date(normalizeWorkDate(to));
+
+	while (cursor <= end) {
+		const dayName = JS_DAY_TO_NAME[cursor.getUTCDay()];
+		const isoDate = cursor.toISOString().slice(0, 10);
+		const shift = pattern[dayName];
+
+		// Día sin turno asignado (descanso implícito).
+		if (!shift || ws.restDays.includes(dayName)) {
+			result.skipped++;
+			cursor.setUTCDate(cursor.getUTCDate() + 1);
+			continue;
+		}
+
+		// Si ya existe cualquier assignment vivo para esta fecha, respetar.
+		const existing = await findAssignmentsByUserAndDate(
+			orgId,
+			employeeId,
+			new Date(cursor),
+		);
+		if (existing.length > 0) {
+			result.skipped++;
+			cursor.setUTCDate(cursor.getUTCDate() + 1);
+			continue;
+		}
+
+		const periodDto = dayShiftToWorkPeriodDto(shift);
+		if (!periodDto) {
+			result.errors.push({
+				date: isoDate,
+				reason:
+					"Falta startLocationId/endLocationId en el patrón. Edita el horario y agrega ubicaciones.",
+			});
+			cursor.setUTCDate(cursor.getUTCDate() + 1);
+			continue;
+		}
+
+		await createAssignment({
+			userId: employeeId,
+			workDate: new Date(cursor),
+			periods: [periodDto],
+			fromTemplateId: wsDoc.templateId ? wsDoc.templateId.toHexString() : null,
+			notes: null,
+			orgId,
+			createdBy: context.actor.id,
+			createdByName: context.actor.displayName,
+			userName: employee.displayName,
+			userPosition: profile.position ?? null,
+		});
+		result.created++;
+
+		cursor.setUTCDate(cursor.getUTCDate() + 1);
+	}
+
+	logger.info(
+		{
+			employeeId,
+			from: from.toISOString(),
+			to: to.toISOString(),
+			...result,
+		},
+		"Schedule assignments generated from workSchedule",
+	);
+
+	if (context) {
+		await emitAuditEvent({
+			category: "employees",
+			action: "employee_updated",
+			target: {type: "employee", id: employeeId, displayName: employee.displayName},
+			metadata: {
+				operation: "generate_schedule_assignments",
+				from: from.toISOString(),
+				to: to.toISOString(),
+				created: result.created,
+				skipped: result.skipped,
+				errors: result.errors.length,
+			},
+			context,
+		});
+	}
+
+	return result;
 }
 
 // ── Cambiar estatus de empleo ─────────────────────────────────────────────

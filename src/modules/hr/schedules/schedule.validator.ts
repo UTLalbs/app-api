@@ -37,6 +37,8 @@ const workPeriodSchema = z.object({
   serviceCommitments: z.array(serviceCommitmentSchema),
   applyAutoBreak: z.boolean(),
   breakDurationMinutes: z.number().int().min(0).max(120),
+  breakStartTime: z.string().regex(TIME_HHMM).nullable().default(null),
+  breakEndTime: z.string().regex(TIME_HHMM).nullable().default(null),
   coveringForUserId: z.string().length(24).nullable(),
   coverageReason: z.string().max(500).nullable(),
   notes: z.string().max(500).nullable(),
