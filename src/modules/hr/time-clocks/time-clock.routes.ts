@@ -9,6 +9,7 @@ import {
   closeSessionHandler,
   createEventHandler,
   createManualEventHandler,
+  createManualEventsBatchHandler,
   excludeEventHandler,
   getCurrentSessionHandler,
   getDayHandler,
@@ -19,15 +20,18 @@ import {
   listDaysHandler,
   listEventsHandler,
   listSessionsHandler,
+  materializeVirtualDayHandler,
   pendingByTabHandler,
   recalculateDayHandler,
   resolveAnomalyHandler,
+  unresolveAnomalyHandler,
 } from './time-clock.controller';
 import {
   activeEmployeesSchema,
   closeSessionSchema,
   createEventSchema,
   createManualEventSchema,
+  createManualBatchSchema,
   currentSessionSchema,
   dayIdParamSchema,
   eventIdParamSchema,
@@ -63,6 +67,13 @@ timeClockRouter.post(
   validate(createManualEventSchema),
   authorize('time_clocks', 'correct'),
   createManualEventHandler,
+);
+
+timeClockRouter.post(
+  '/events/manual-batch',
+  validate(createManualBatchSchema),
+  authorize('time_clocks', 'correct'),
+  createManualEventsBatchHandler,
 );
 
 timeClockRouter.get(
@@ -125,11 +136,28 @@ timeClockRouter.post(
   recalculateDayHandler,
 );
 
+// Materializa un Day virtual a partir de (userId, workDate). Útil cuando el
+// planner abre un row virtual en la página de fichajes y necesita un Day
+// real (con anomalías persistidas) para resolver.
+timeClockRouter.post(
+  '/days/materialize',
+  authorize('time_clocks', 'resolve'),
+  materializeVirtualDayHandler,
+);
+
+
 timeClockRouter.post(
   '/days/:id/anomalies/:anomalyId/resolve',
   validate(resolveAnomalySchema),
   authorize('time_clocks', 'resolve'),
   resolveAnomalyHandler,
+);
+
+// Quita la resolución (vuelve a pending) — para deshacer un click erróneo.
+timeClockRouter.post(
+  '/days/:id/anomalies/:anomalyId/unresolve',
+  authorize('time_clocks', 'resolve'),
+  unresolveAnomalyHandler,
 );
 
 // ── Sesiones de revisión ─────────────────────────────────────────────────

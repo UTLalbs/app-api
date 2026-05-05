@@ -24,7 +24,10 @@
 		"docker:down": "docker compose down",
 		"docker:logs": "docker compose logs -f",
 		"seed:catalog": "ts-node -r tsconfig-paths/register src/scripts/seed-document-catalog.ts",
-		"cleanup:tc-orphans": "ts-node -r tsconfig-paths/register src/scripts/cleanup-orphan-time-clock-data.ts"
+		"cleanup:tc-orphans": "ts-node -r tsconfig-paths/register src/scripts/cleanup-orphan-time-clock-data.ts",
+		"cleanup:tc-empty": "ts-node -r tsconfig-paths/register src/scripts/cleanup-empty-time-clock-days.ts",
+		"cleanup:tc-assignments": "ts-node -r tsconfig-paths/register src/scripts/cleanup-empty-schedule-assignments.ts",
+		"wipe:tc": "ts-node -r tsconfig-paths/register src/scripts/wipe-time-clock-data.ts"
 	},
 	"keywords": [],
 	"author": "",

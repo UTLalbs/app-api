@@ -61,7 +61,7 @@ export function detectAnomalies(
       _id: new ObjectId(),
       type: 'shift_missing_clockin',
       severity: minutesLate > 60 ? 'critical' : 'warning',
-      description: `Sin fichaje de entrada · ${formatMinutesAsHours(minutesLate)} de retraso`,
+      description: `Sin fichaje de entrada · ${formatMinutesAsHours(minutesLate)} desde la hora esperada`,
       affectsRole: ['rrhh'],
       affectedEventId: null,
       affectedLocationId: period.startLocationId,
@@ -231,7 +231,10 @@ export function detectAnomalies(
     });
   }
 
-  // 8) Eventos creados manualmente (un evento corregido en nombre del empleado).
+  // 8) Eventos creados manualmente — tracker informativo. NO requiere acción
+  // del manager: la captura manual ES la resolución. Lo emitimos ya resuelto
+  // (auto-aplicado) para que aparezca en el historial del drawer pero NO sume
+  // a pendingItemsCount ni bloquee el cierre de revisión.
   const manualEvents = events.filter(
     (e) => !e.isExcluded && e.source === 'manual_correction',
   );
@@ -245,10 +248,10 @@ export function detectAnomalies(
       affectedEventId: manualEvents[0]._id,
       affectedLocationId: null,
       detectedAt: now,
-      resolvedAt: null,
+      resolvedAt: now,
       resolvedBy: null,
-      resolutionType: null,
-      resolutionNotes: null,
+      resolutionType: 'manual_correction',
+      resolutionNotes: 'Auto-resuelta: la captura manual es la resolución',
     });
   }
 

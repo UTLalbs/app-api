@@ -13,11 +13,13 @@ import { emitAuditEvent } from '../../audit/audit.service';
 import type { AuditContext } from '../../audit/audit.types';
 import { getLocationCollection } from '../../locations/location.model';
 import type { LocationDocument } from '../../locations/location.types';
+import { getOrgTimezone } from '../../organizations/organization.service';
 import { getUserCollection } from '../../users/user.model';
 import { findOverlappingForSchedule } from '../absences/absence.repository';
 import {
   findAssignmentById,
   findAssignmentsByUserInRange,
+  findTemplateById,
 } from '../schedules/schedule.repository';
 import type {
   ScheduleAssignmentDocument,
@@ -32,6 +34,7 @@ import {
   endOfUtcDay,
   parseTime,
   startOfUtcDay,
+  workDateInTimezone,
 } from './overtime.helpers';
 import { recalculateDay } from './time-clock-day.service';
 import {
@@ -415,11 +418,15 @@ export async function registerEvent(
 
   await insertEvent(doc);
 
-  // 9. Recalcular el día agregado.
+  // 9. Recalcular el día agregado. Usar workDate del día LOCAL del org —
+  //    un evento a las 00:05 UTC en Mexico (UTC-5) pertenece al día anterior
+  //    Mexico, no al UTC equivalente.
+  const orgTzForRecalc = await getOrgTimezone(orgId);
+  const recalcWorkDate = workDateInTimezone(eventDate, orgTzForRecalc);
   await recalculateDay(
     new ObjectId(orgId),
     new ObjectId(input.userId),
-    eventDate,
+    recalcWorkDate,
   ).catch((err) =>
     logger.warn(
       { err, userId: input.userId, eventDate },
@@ -538,6 +545,67 @@ export async function registerManualEvent(
   return toTimeClockEvent(updated);
 }
 
+// ── Registro batch (varios eventos en una captura) ────────────────────────
+//
+// Uso típico: planner captura un fichaje atrasado completo (entrada, comida,
+// salida, descansos) en un solo submit. Procesamos secuencialmente — si uno
+// falla, devolvemos error y los anteriores quedan persistidos. El frontend
+// debe mostrar el progreso y permitir retry. No usamos transacciones MongoDB
+// para mantener simple el flujo.
+
+export interface ManualEventBatchInput {
+  userId: string;
+  correctionReason: string;
+  events: ReadonlyArray<{
+    type: import('./time-clock.types').TimeClockEventType;
+    clockedAt: Date;
+    expectedLocationId: string;
+    notes: string | null;
+  }>;
+}
+
+export async function registerManualEventsBatch(
+  user: AuthenticatedUser,
+  orgId: string,
+  input: ManualEventBatchInput,
+  device: DeviceInfo,
+  context: AuditContext,
+): Promise<TimeClockEvent[]> {
+  if (!context.actor) {
+    throw new ForbiddenError('Actor required to create manual events');
+  }
+  const canCorrect =
+    user.resolvedPermissions.time_clocks?.includes('correct') ?? false;
+  if (!canCorrect) {
+    throw new ForbiddenError('Sin permisos para registrar fichajes manuales');
+  }
+
+  const created: TimeClockEvent[] = [];
+  // Procesa en orden cronológico para que recalculateDay coherente al final.
+  const sorted = [...input.events].sort(
+    (a, b) => a.clockedAt.getTime() - b.clockedAt.getTime(),
+  );
+  for (const ev of sorted) {
+    const result = await registerManualEvent(
+      user,
+      orgId,
+      {
+        userId: input.userId,
+        type: ev.type,
+        clockedAt: ev.clockedAt,
+        expectedLocationId: ev.expectedLocationId,
+        correctionReason: input.correctionReason,
+        correctsEventId: null,
+        notes: ev.notes,
+      },
+      device,
+      context,
+    );
+    created.push(result);
+  }
+  return created;
+}
+
 // ── Excluir evento ────────────────────────────────────────────────────────
 
 export async function excludeEvent(
@@ -574,7 +642,9 @@ export async function excludeEvent(
   if (!updated) throw new NotFoundError('Evento de fichaje');
 
   // Recalcular el día — la exclusión cambia el cómputo.
-  await recalculateDay(updated.orgId, updated.userId, updated.clockedAt).catch(
+  const orgTzExclude = await getOrgTimezone(updated.orgId.toHexString());
+  const excludeWorkDate = workDateInTimezone(updated.clockedAt, orgTzExclude);
+  await recalculateDay(updated.orgId, updated.userId, excludeWorkDate).catch(
     (err) =>
       logger.warn(
         { err, eventId: id },
@@ -636,24 +706,11 @@ export async function getMyClockStatus(
 ): Promise<MyClockStatus> {
   const userId = new ObjectId(user.id);
 
-  // 0. Auto-materializar Assignment desde workSchedule si no existe.
-  //    Esto permite que el modal de fichaje muestre el turno virtual
-  //    como real antes de que el usuario haga clock-in.
+  // 1. Schedule del día. NO materializamos pre-emptivamente — si no existe
+  //    Assignment real (porque aún no hay fichaje), computamos un schedule
+  //    virtual desde el workSchedule del empleado para mostrar el horario
+  //    esperado. La materialización ocurre solo al fichar.
   const today = new Date();
-  try {
-    const employee = await loadEmployeeOrThrow(orgId, user.id);
-    await tryMaterializeFromWorkSchedule(
-      orgId,
-      user.id,
-      today,
-      employee,
-      { id: user.id, displayName: user.displayName },
-    );
-  } catch {
-    // Si el usuario no es empleado o falla, continuamos sin schedule.
-  }
-
-  // 1. Schedule del día.
   const dayStart = startOfUtcDay(today);
   const dayEnd = endOfUtcDay(today);
   const schedules = await findAssignmentsByUserInRange(
@@ -662,8 +719,19 @@ export async function getMyClockStatus(
     dayStart,
     dayEnd,
   );
-  const schedule = schedules[0] ?? null;
-  const period = schedule?.periods[0] ?? null;
+  let schedule = schedules[0] ?? null;
+  let period = schedule?.periods[0] ?? null;
+
+  // Si no hay Assignment real, construir uno virtual desde workSchedule.
+  // Vive solo en memoria — no se persiste hasta que llegue un fichaje.
+  let virtualScheduleData: VirtualScheduleData | null = null;
+  if (!schedule) {
+    virtualScheduleData = await buildVirtualScheduleForToday(
+      orgId,
+      user.id,
+      today,
+    );
+  }
 
   // 2. Ausencia activa.
   const overlappingAbsences = await findOverlappingForSchedule(
@@ -681,10 +749,12 @@ export async function getMyClockStatus(
   const dayDoc = await findDayByUserAndDate(orgId, user.id, dayStart);
 
   // 5. Determinar currentState.
+  // Si hay schedule real OR virtual, el empleado tiene jornada esperada hoy.
+  const hasScheduleToday = !!schedule || !!virtualScheduleData;
   let currentState: MyClockStatus['currentState'] = 'no_schedule';
   if (activeAbsence) {
     currentState = 'absence';
-  } else if (!schedule) {
+  } else if (!hasScheduleToday) {
     currentState = 'no_schedule';
   } else if (!lastEventDoc) {
     currentState = 'before_shift';
@@ -738,6 +808,30 @@ export async function getMyClockStatus(
   // 7. Lazy-import del helper para evitar import circular.
   const { toTimeClockDay } = await import('./time-clock-day.repository');
 
+  // Resolver locations del schedule virtual si aplica.
+  if (!period && virtualScheduleData) {
+    if (virtualScheduleData.startLocationId) {
+      const ids = new Set([virtualScheduleData.startLocationId]);
+      if (virtualScheduleData.endLocationId) {
+        ids.add(virtualScheduleData.endLocationId);
+      }
+      const docs = await getLocationCollection()
+        .find(
+          {
+            _id: { $in: [...ids].map((id) => new ObjectId(id)) },
+            orgId: new ObjectId(orgId),
+          },
+          { projection: { _id: 1, name: 1 } },
+        )
+        .toArray();
+      const map = new Map(docs.map((d) => [d._id.toHexString(), d.name]));
+      expectedStartLocationName = map.get(virtualScheduleData.startLocationId) ?? null;
+      expectedEndLocationName = virtualScheduleData.endLocationId
+        ? map.get(virtualScheduleData.endLocationId) ?? null
+        : null;
+    }
+  }
+
   return {
     currentState,
     schedule: schedule
@@ -751,12 +845,113 @@ export async function getMyClockStatus(
           expectedEndLocationId: period?.endLocationId.toHexString() ?? null,
           expectedEndLocationName,
         }
-      : null,
+      : virtualScheduleData
+        ? {
+            id: `virtual-${user.id}-${dayStart.toISOString().slice(0, 10)}`,
+            workDate: dayStart.toISOString().slice(0, 10),
+            expectedStart: virtualScheduleData.startTime,
+            expectedEnd: virtualScheduleData.endTime,
+            expectedStartLocationId: virtualScheduleData.startLocationId,
+            expectedStartLocationName,
+            expectedEndLocationId: virtualScheduleData.endLocationId,
+            expectedEndLocationName,
+          }
+        : null,
     lastEvent: lastEventDoc ? toTimeClockEvent(lastEventDoc) : null,
     todayDay: dayDoc ? toTimeClockDay(dayDoc) : null,
     activeAbsenceCategoryName:
       activeAbsence?.denormalizedRefs.categoryName ?? null,
   };
+}
+
+// ── Schedule virtual desde workSchedule (sin persistir) ────────────────────
+//
+// Resuelve el patrón del empleado para hoy (custom o template) y devuelve
+// los datos suficientes para que getMyClockStatus muestre el horario esperado
+// sin crear `ScheduleAssignment` en BD. La materialización se difiere hasta
+// que llegue un fichaje.
+
+interface VirtualScheduleData {
+  startTime: string;
+  endTime: string;
+  startLocationId: string | null;
+  endLocationId: string | null;
+}
+
+async function buildVirtualScheduleForToday(
+  orgId: string,
+  userId: string,
+  date: Date,
+): Promise<VirtualScheduleData | null> {
+  const { getOrgTimezone } = await import('../../organizations/organization.service');
+  const orgTimezone = await getOrgTimezone(orgId);
+  const workDate = workDateInTimezone(date, orgTimezone);
+
+  const userDoc = await (
+    await import('../../users/user.model')
+  ).getUserCollection().findOne(
+    {
+      _id: new ObjectId(userId),
+      orgId: new ObjectId(orgId),
+      deletedAt: null,
+    },
+    { projection: { 'employeeProfile.workSchedule': 1 } },
+  );
+
+  const ws = userDoc?.employeeProfile?.workSchedule as
+    | {
+        mode?: string;
+        templateId?: ObjectId | string | null;
+        customPattern?: Record<string, {
+          startTime: string;
+          endTime: string;
+          startLocationId?: ObjectId | string | null;
+          endLocationId?: ObjectId | string | null;
+        } | null> | null;
+        restDays?: string[];
+      }
+    | null
+    | undefined;
+  if (!ws || ws.mode !== 'fixed') return null;
+
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const dayName = dayNames[workDate.getUTCDay()];
+  if (ws.restDays?.includes(dayName)) return null;
+
+  const idToHex = (v: unknown): string | null => {
+    if (!v) return null;
+    if (v instanceof ObjectId) return v.toHexString();
+    if (typeof v === 'string') return v;
+    return null;
+  };
+
+  // Resolver shift desde customPattern primero, luego template
+  const shiftRaw = ws.customPattern?.[dayName];
+  if (shiftRaw) {
+    return {
+      startTime: shiftRaw.startTime,
+      endTime: shiftRaw.endTime,
+      startLocationId: idToHex(shiftRaw.startLocationId),
+      endLocationId: idToHex(shiftRaw.endLocationId),
+    };
+  }
+
+  if (ws.templateId) {
+    const tplId = ws.templateId instanceof ObjectId
+      ? ws.templateId.toHexString()
+      : String(ws.templateId);
+    const tpl = await findTemplateById(tplId, orgId);
+    if (tpl) {
+      return {
+        startTime: tpl.defaultStartTime,
+        endTime: tpl.defaultEndTime,
+        startLocationId: tpl.defaultStartLocationId ?? null,
+        endLocationId: tpl.defaultEndLocationId ?? tpl.defaultStartLocationId ?? null,
+      };
+    }
+  }
+
+  return null;
 }
 
 // Versión compacta para el widget de la topbar (datos mínimos, latencia baja).

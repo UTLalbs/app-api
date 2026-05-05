@@ -416,8 +416,9 @@ export function dayShiftToWorkPeriodDto(
 	shift: DayShiftDocument,
 ): WorkPeriodDto | null {
 	const startId = locIdToHex(shift.startLocationId);
-	const endId = locIdToHex(shift.endLocationId);
-	if (!startId || !endId) return null;
+	// endLocationId opcional — si no está, asumimos misma que start.
+	const endId = locIdToHex(shift.endLocationId) ?? startId;
+	if (!startId) return null;
 	return {
 		shiftType: shift.shiftType,
 		startTime: shift.startTime,
@@ -426,7 +427,7 @@ export function dayShiftToWorkPeriodDto(
 		endDayOffset: shift.endDayOffset,
 		expectedDurationDays: shift.multiDay ? Math.max(shift.endDayOffset, 1) : null,
 		startLocationId: startId,
-		endLocationId: endId,
+		endLocationId: endId!,
 		serviceCommitments: [],
 		applyAutoBreak: shift.applyAutoBreak,
 		breakDurationMinutes: shift.breakDurationMinutes,

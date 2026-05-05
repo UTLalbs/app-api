@@ -15,6 +15,7 @@ import {
   listTimeClockDays,
   recalculateDay,
   resolveAnomaly,
+  unresolveAnomaly,
 } from './time-clock-day.service';
 import { toTimeClockDay } from './time-clock-day.repository';
 import {
@@ -26,6 +27,7 @@ import {
   listEvents,
   registerEvent,
   registerManualEvent,
+  registerManualEventsBatch,
 } from './time-clock.service';
 import type {
   ActiveEmployeesInput,
@@ -94,6 +96,20 @@ export const createManualEventHandler = asyncHandler(
       buildAuditContext(req),
     );
     res.status(201).json({ success: true, data: event });
+  },
+);
+
+export const createManualEventsBatchHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const orgId = effectiveOrgId(req);
+    const events = await registerManualEventsBatch(
+      req.user!,
+      orgId,
+      req.body,
+      deviceFromReq(req),
+      buildAuditContext(req),
+    );
+    res.status(201).json({ success: true, data: events });
   },
 );
 
@@ -187,6 +203,86 @@ export const recalculateDayHandler = asyncHandler(
   },
 );
 
+// Materializa un Day virtual: recibe (userId, workDate) y dispara
+//   1) tryMaterializeFromWorkSchedule — crea ScheduleAssignment desde el
+//      workSchedule del empleado si no existe.
+//   2) recalculateDay — crea el TimeClockDay con anomalías detectadas.
+// Devuelve el Day con id real para que el frontend abra el drawer y permita
+// resolver anomalías.
+export const materializeVirtualDayHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) throw new Error('Not authenticated');
+    const orgId = effectiveOrgId(req);
+    const userId = String(req.body?.userId ?? '');
+    const workDateStr = String(req.body?.workDate ?? '');
+    if (!ObjectId.isValid(userId) || !workDateStr) {
+      res.status(400).json({
+        success: false,
+        error: { code: 'BAD_REQUEST', message: 'userId o workDate inválidos' },
+      });
+      return;
+    }
+    // workDate llega como ISO yyyy-mm-dd o ISO completo. Truncar a UTC midnight.
+    const parsed = new Date(workDateStr);
+    const workDate = new Date(
+      Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate()),
+    );
+
+    // 1) Cargar empleado para denormalizar refs en el Assignment.
+    const { getUserCollection } = await import('../../users/user.model');
+    const userDoc = await getUserCollection().findOne(
+      {
+        _id: new ObjectId(userId),
+        orgId: new ObjectId(orgId),
+        deletedAt: null,
+      },
+      {
+        projection: {
+          _id: 1,
+          displayName: 1,
+          'employeeProfile.position': 1,
+        },
+      },
+    );
+    if (!userDoc) {
+      res.status(404).json({
+        success: false,
+        error: { code: 'NOT_FOUND', message: 'Empleado no encontrado' },
+      });
+      return;
+    }
+
+    // 2) Crear Schedule desde el workSchedule del empleado (si aplica al día).
+    // tryMaterializeFromWorkSchedule espera un instante real y lo localiza
+    // al día del org. Si pasamos workDate UTC-midnight, la localización lo
+    // manda al día anterior. Por eso pasamos noon UTC del workDate — un
+    // instante que cae dentro del día local sin importar la timezone.
+    const noonUtc = new Date(workDate.getTime() + 12 * 60 * 60_000);
+    const { tryMaterializeFromWorkSchedule } = await import(
+      './materialize.helpers'
+    );
+    await tryMaterializeFromWorkSchedule(
+      orgId,
+      userId,
+      noonUtc,
+      {
+        id: userId,
+        displayName: userDoc.displayName ?? '—',
+        position: userDoc.employeeProfile?.position ?? null,
+      },
+      { id: req.user.id, displayName: req.user.displayName },
+    );
+
+    // 3) Crear/refrescar el Day y devolverlo.
+    const created = await recalculateDay(
+      new ObjectId(orgId),
+      new ObjectId(userId),
+      workDate,
+    );
+    res.json({ success: true, data: toTimeClockDay(created) });
+  },
+);
+
 export const resolveAnomalyHandler = asyncHandler(
   async (req: Request & ResolveAnomalyInput, res: Response) => {
     const day = await resolveAnomaly(
@@ -199,6 +295,18 @@ export const resolveAnomalyHandler = asyncHandler(
         correctedClockedAt: req.body.correctedClockedAt,
         correctedLocationId: req.body.correctedLocationId,
       },
+      buildAuditContext(req),
+    );
+    res.json({ success: true, data: day });
+  },
+);
+
+export const unresolveAnomalyHandler = asyncHandler(
+  async (req: Request, res: Response) => {
+    const day = await unresolveAnomaly(
+      req.user!,
+      String(req.params.id),
+      String(req.params.anomalyId),
       buildAuditContext(req),
     );
     res.json({ success: true, data: day });

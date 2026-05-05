@@ -59,6 +59,8 @@ export type ResolutionType =
   | 'accepted_as_reported'
   | 'incident_raised'
   | 'tardiness_justified'
+  | 'early_departure_justified'
+  | 'early_departure_unjustified'
   | 'event_excluded';
 
 export type AffectedRole = 'rrhh' | 'operations' | 'client';
@@ -357,6 +359,10 @@ export interface TimeClockDay {
 
   createdAt: Date;
   updatedAt: Date;
+
+  // Marcador frontend-only: true si el Day fue derivado del workSchedule del
+  // empleado (no existe en BD). Al fichar o resolver una anomalía se materializa.
+  __virtual?: boolean;
 }
 
 // ── Sesión de revisión ─────────────────────────────────────────────────────

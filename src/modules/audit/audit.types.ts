@@ -88,6 +88,7 @@ export type AuditAction =
   | 'event_manual_created'
   | 'event_excluded'
   | 'anomaly_resolved'
+  | 'anomaly_unresolved'
   | 'review_session_closed'
   // documents
   | 'doc_catalog_item_created'

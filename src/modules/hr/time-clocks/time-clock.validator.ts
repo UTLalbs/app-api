@@ -18,6 +18,8 @@ const RESOLUTION_TYPES = [
   'accepted_as_reported',
   'incident_raised',
   'tardiness_justified',
+  'early_departure_justified',
+  'early_departure_unjustified',
   'event_excluded',
 ] as const;
 
@@ -79,6 +81,26 @@ export const createManualEventSchema = z.object({
     correctionReason: z.string().min(1).max(500),
     correctsEventId: z.string().length(24).nullable().default(null),
     notes: z.string().max(1000).nullable().default(null),
+  }),
+});
+
+// Captura de varios eventos en un solo submit — caso típico: planner registra
+// fichaje atrasado completo (entrada, comida, salida) en una sola pasada.
+export const createManualBatchSchema = z.object({
+  body: z.object({
+    userId: z.string().length(24),
+    correctionReason: z.string().min(1).max(500),
+    events: z
+      .array(
+        z.object({
+          type: z.enum(EVENT_TYPES),
+          clockedAt: z.coerce.date(),
+          expectedLocationId: z.string().length(24),
+          notes: z.string().max(1000).nullable().default(null),
+        }),
+      )
+      .min(1)
+      .max(10),
   }),
 });
 
