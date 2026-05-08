@@ -3,7 +3,7 @@ import {ForbiddenError, NotFoundError, ValidationError} from "../../shared/error
 import {computeDiff} from "../../shared/utils/diff";
 import {emitAuditEvent} from "../audit/audit.service";
 import type {AuditContext} from "../audit/audit.types";
-import {validateRFC} from "../tax/tax.service";
+import {validateRfc} from "../sat/sat.service";
 
 import {
 	autocompleteLocations as autocompleteLocationsRepo,
@@ -329,7 +329,7 @@ export async function validateLocationFiscal(
 	let notes: string | null = null;
 
 	try {
-		const result = await validateRFC({
+		const result = await validateRfc({
 			rfc: dto.rfc,
 			nombreRazonSocial: dto.razonSocial,
 			regimenFiscal: existing.fiscal?.regimenFiscal?.code,

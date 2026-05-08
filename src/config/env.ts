@@ -68,8 +68,12 @@ const envSchema = z.object({
 	RATE_LIMIT_MAX_AUTH: z.coerce.number().default(10),
 	RATE_LIMIT_MAX_API: z.coerce.number().default(5000),
 
-	// FacturoPorTi / Tax service
-	FACTUROPORTI_BASE_URL: z.string().url(),
+	// FacturoPorTi / SAT integration
+	// La URL se deriva automáticamente de NODE_ENV en `facturoportiClient.ts`
+	// (production → api.facturoporti, otro → testapi.facturoporti). Esta var
+	// es OPCIONAL — solo úsala si necesitas apuntar a un host distinto al
+	// default del ambiente (ej. dev contra prod para debugging puntual).
+	FACTUROPORTI_BASE_URL: z.string().url().optional(),
 	FACTUROPORTI_TOKEN: z.string().min(1),
 
 	// Developer notification (placeholders hasta Phase 2)

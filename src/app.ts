@@ -13,6 +13,8 @@ import {apiLimiter} from "./middleware/rateLimiter";
 import {requestId} from "./middleware/requestId";
 import {auditRouter} from "./modules/audit/audit.routes";
 import {authRouter} from "./modules/auth/auth.routes";
+import {businessPartnersRouter} from "./modules/business-partners/business-partners.routes";
+import {catalogsRouter} from "./modules/catalogs/catalogs.routes";
 import {absenceRouter} from "./modules/hr/absences/absence.routes";
 import {departmentRouter} from "./modules/hr/departments/department.routes";
 import {documentCatalogRouter} from "./modules/hr/document-catalog/document-catalog.routes";
@@ -25,8 +27,9 @@ import {locationRouter} from "./modules/locations/location.routes";
 import {notificationRouter} from "./modules/notifications/notification.routes";
 import {organizationRouter} from "./modules/organizations/organization.routes";
 import {roleRouter} from "./modules/roles/role.routes";
+import {satRouter} from "./modules/sat/sat.routes";
 import {taskRouter} from "./modules/tasks/task.routes";
-import {taxRouter} from "./modules/tax/tax.routes";
+import {trailersRouter} from "./modules/trailers/trailers.routes";
 import {userRouter} from "./modules/users/user.routes";
 
 export function createApp(httpLogger: RequestHandler): express.Application {
@@ -85,7 +88,10 @@ export function createApp(httpLogger: RequestHandler): express.Application {
 	app.use("/api/v1/organizations", organizationRouter);
 	app.use("/api/v1/roles", apiLimiter, roleRouter);
 	app.use("/api/v1/users", userRouter);
-	app.use("/api/v1/tax", apiLimiter, taxRouter);
+	app.use("/api/v1/sat", apiLimiter, satRouter);
+	app.use("/api/v1/catalogs", apiLimiter, catalogsRouter);
+	app.use("/api/v1/business-partners", apiLimiter, businessPartnersRouter);
+	app.use("/api/v1/trailers", apiLimiter, trailersRouter);
 	app.use("/api/v1/tasks", apiLimiter, taskRouter);
 	app.use("/api/v1/notifications", apiLimiter, notificationRouter);
 	app.use("/api/v1/employees", apiLimiter, employeeRouter);

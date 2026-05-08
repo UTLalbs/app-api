@@ -6,6 +6,8 @@ export type AuditCategory =
   | 'users'          // create, update, delete, status change
   | 'roles'          // create, update, delete, permissions
   | 'organizations'
+  | 'business_partners'  // socios comerciales (arrendadores, exchange partners)
+  | 'trailers'           // remolques / semirremolques
   | 'tasks'
   | 'employees'
   | 'schedules'      // plantillas de turnos + asignaciones
@@ -42,6 +44,24 @@ export type AuditAction =
   | 'org_created'
   | 'org_updated'
   | 'org_deleted'
+  | 'tax_id_added'
+  | 'tax_id_updated'
+  | 'tax_id_default_set'
+  | 'tax_id_disabled'
+  // business partners
+  | 'business_partner_created'
+  | 'business_partner_updated'
+  | 'business_partner_deactivated'
+  | 'business_partner_role_added'
+  | 'business_partner_role_removed'
+  // trailers
+  | 'trailer_created'
+  | 'trailer_quick_registered'
+  | 'trailer_updated'
+  | 'trailer_status_changed'
+  | 'trailer_decommissioned'
+  | 'trailer_returned_to_partner'
+  | 'trailer_deleted'
   // tasks
   | 'task_created'
   | 'task_updated'

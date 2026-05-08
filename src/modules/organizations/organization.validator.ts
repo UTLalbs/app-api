@@ -15,6 +15,10 @@ const featuresSchema = z.object({
 const settingsSchema = z.object({
 	timezone: z.string().default("America/Mexico_City"),
 	distanceUnit: z.enum(["km", "mi"]).default("km"),
+	weightUnit: z.enum(["kg", "lb"]).default("kg"),
+	dimensionUnit: z.enum(["m", "ft"]).default("m"),
+	volumeUnit: z.enum(["m3", "ft3"]).default("m3"),
+	temperatureUnit: z.enum(["C", "F"]).default("C"),
 	currency: z.array(z.string()).default(["MXN"]),
 	gpsUpdateInterval: z.coerce.number().min(5).max(300).default(30),
 	maxUsers: z.coerce.number().min(1).default(10),
@@ -44,9 +48,17 @@ const addressSchema = z.object({
 	reference: z.string().optional(),
 });
 
-const fiscalDataSchema = z.object({
-	rfc: z.string().min(12).max(13),
-	razonSocial: z.string().min(1),
+/**
+ * Primer taxId enviado en el alta de organización. El resto de RFCs se agregan
+ * vía POST /organizations/:id/tax-ids.
+ */
+const initialTaxIdSchema = z.object({
+	rfc: z
+		.string()
+		.min(12)
+		.max(13)
+		.regex(/^[A-Z&Ñ]{3,4}\d{6}[A-Z\d]{3}$/, "Formato de RFC inválido"),
+	razonSocial: z.string().min(1).max(300),
 	regimenFiscal: z.object({
 		code: z.string().min(1),
 		name: z.string().min(1),
@@ -79,7 +91,7 @@ export const createOrganizationSchema = z.object({
 			.optional(),
 
 		status: z.enum(["active", "trial", "suspended", "cancelled"]).optional(),
-		fiscalData: fiscalDataSchema.optional().nullable(),
+		initialTaxId: initialTaxIdSchema.optional().nullable(),
 		contacts: z.array(contactSchema).optional().default([]),
 	}),
 });
@@ -90,7 +102,6 @@ export const updateOrganizationSchema = z.object({
 		name: z.string().min(2).max(100).optional(),
 		status: z.enum(["active", "trial", "suspended", "cancelled"]).optional(),
 		settings: settingsSchema.partial().optional(),
-		fiscalData: fiscalDataSchema.optional().nullable(),
 		contact: contactSchema.optional().nullable(),
 	}),
 });

@@ -29,11 +29,12 @@ import {
 } from './organization.repository';
 import type { CreateOrganizationDto, Organization, UpdateOrganizationDto } from './organization.types';
 
+// `fiscalData` (taxIds[]) ya NO se modifica vía PATCH /:id — los RFCs se
+// gestionan exclusivamente por los endpoints anidados /:id/tax-ids/*.
 const ORG_UPDATABLE_FIELDS = [
   'name',
   'status',
   'settings',
-  'fiscalData',
   'contacts',
 ] as const satisfies readonly (keyof UpdateOrganizationDto)[];
 

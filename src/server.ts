@@ -6,10 +6,14 @@ import {env} from "./config/env";
 import {httpLoggerOptions} from "./config/http-logger";
 import {logger} from "./config/logger";
 import {getRedisClient, disconnectRedis} from "./config/redis";
+import {runPendingMigrations} from "./migrations/migrationRunner";
 import {registerAuditArchiveJob} from "./infrastructure/jobs/audit-archive.job";
 import {closeAuditQueue} from "./infrastructure/jobs/audit.queue";
 import {startAuditWorker, stopAuditWorker} from "./infrastructure/jobs/audit.worker";
+import {registerCatalogsSyncJob, runCatalogsSync} from "./infrastructure/jobs/catalogs-sync.job";
 import {registerEmployeeAlertsJob} from "./infrastructure/jobs/employee.alerts.job";
+import {createBusinessPartnersIndexes} from "./modules/business-partners/business-partners.model";
+import {createTrailerIndexes} from "./modules/trailers/trailers.model";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
 import {createAbsenceIndexes} from "./modules/hr/absences/absence.model";
@@ -35,6 +39,10 @@ async function bootstrap(): Promise<void> {
 	//  Conectar base de datos
 	await connectDatabase();
 
+	// Migraciones — corren antes de índices y seeds. Idempotentes.
+	// Soporta MIGRATION_DRY_RUN=true para preview sin tocar datos.
+	await runPendingMigrations();
+
 	// Índices — orden no importa, son independientes
 	await Promise.all([
 		createUserIndexes(),
@@ -51,6 +59,8 @@ async function bootstrap(): Promise<void> {
 		createScheduleIndexes(),
 		createAbsenceIndexes(),
 		createTimeClockIndexes(),
+		createBusinessPartnersIndexes(),
+		createTrailerIndexes(),
 		registerEmployeeAlertsJob(),
 	]);
 
@@ -129,6 +139,11 @@ async function bootstrap(): Promise<void> {
 	// Registrar job diario que archiva audits viejos a S3 Glacier antes de que
 	// el TTL los borre. No-op si AUDIT_ARCHIVE_BUCKET no está configurado.
 	registerAuditArchiveJob();
+
+	// Registrar cron diario de sync de catálogos SAT (03:00 UTC). Adicionalmente
+	// dispara una sync inicial en background para warm-up del cache si está vacío.
+	registerCatalogsSyncJob();
+	void runCatalogsSync();
 
 	// Crear app Express
 	const app = createApp(pinoHttp(httpLoggerOptions));

@@ -127,6 +127,11 @@ export const MODULE_CATALOG: Record<FeatureKey, ModuleSpec> = {
 				actions: FULL_CRUD,
 				supportsScope: false,
 			},
+			trailers: {
+				label: "Remolques",
+				actions: FULL_CRUD,
+				supportsScope: false,
+			},
 		},
 	},
 };

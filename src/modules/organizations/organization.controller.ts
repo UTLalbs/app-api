@@ -5,10 +5,10 @@ import {asyncHandler} from "../../shared/utils/asyncHandler";
 import {buildAuditContext} from "../../shared/utils/auditContext";
 
 import {
+	editOrganization,
 	getOrganizationById,
 	listOrganizations,
 	registerOrganization,
-	editOrganization,
 	removeOrganization,
 } from "./organization.service";
 import type {
@@ -43,8 +43,7 @@ export const createOrganization = asyncHandler(
 			{
 				name: req.body.name,
 				slug: req.body.slug,
-				settings: req.body.settings,
-				fiscalData: req.body.fiscalData,
+				initialTaxId: req.body.initialTaxId ?? null,
 				contacts: req.body.contacts,
 			},
 			req.user!.id,
@@ -62,8 +61,6 @@ export const updateOrganization = asyncHandler(
 				name: req.body.name,
 				status: req.body.status,
 				settings: req.body.settings,
-				fiscalData: req.body.fiscalData,
-				contacts: req.body.contacts,
 			},
 			buildAuditContext(req),
 		);

@@ -8,10 +8,40 @@ import type {
 	CreateOrganizationDto,
 	Organization,
 	OrganizationDocument,
+	OrganizationFiscalData,
+	OrganizationFiscalDataDocument,
+	OrganizationTaxId,
+	OrganizationTaxIdDocument,
 	UpdateOrganizationDto,
 } from "./organization.types";
 
-// ── Conversión de documento MongoDB a tipo de dominio ─────────────────────
+// ── Conversiones documento ↔ dominio ──────────────────────────────────────
+
+function toTaxId(doc: OrganizationTaxIdDocument): OrganizationTaxId {
+	return {
+		id: doc._id.toHexString(),
+		rfc: doc.rfc,
+		razonSocial: doc.razonSocial,
+		regimenFiscal: doc.regimenFiscal,
+		address: doc.address,
+		isDefault: doc.isDefault,
+		isActive: doc.isActive,
+		rfcValidatedAt: doc.rfcValidatedAt,
+		rfcValidatedStatus: doc.rfcValidatedStatus,
+		createdAt: doc.createdAt,
+		updatedAt: doc.updatedAt,
+	};
+}
+
+function toFiscalData(
+	doc: OrganizationFiscalDataDocument | null | undefined,
+): OrganizationFiscalData | null {
+	if (!doc) return null;
+	return {
+		taxIds: (doc.taxIds ?? []).map(toTaxId),
+	};
+}
+
 function toOrganization(doc: OrganizationDocument): Organization {
 	return {
 		id: doc._id.toHexString(),
@@ -19,7 +49,7 @@ function toOrganization(doc: OrganizationDocument): Organization {
 		slug: doc.slug,
 		status: doc.status,
 		settings: doc.settings,
-		fiscalData: doc.fiscalData ?? null,
+		fiscalData: toFiscalData(doc.fiscalData),
 		contacts: doc.contacts ?? [],
 		createdAt: doc.createdAt,
 		updatedAt: doc.updatedAt,
@@ -61,19 +91,45 @@ export async function findAllOrganizations(): Promise<Organization[]> {
 }
 
 export async function createOrganization(
-	dto: CreateOrganizationDto,
+	dto: CreateOrganizationDto & {slug: string},
 ): Promise<Organization> {
 	const now = new Date();
+
+	// Si viene un primer taxId, lo dejamos como `taxIds[0]` con isDefault: true
+	let fiscalData: OrganizationFiscalDataDocument | null = null;
+	if (dto.initialTaxId) {
+		fiscalData = {
+			taxIds: [
+				{
+					_id: new ObjectId(),
+					rfc: dto.initialTaxId.rfc.toUpperCase().trim(),
+					razonSocial: dto.initialTaxId.razonSocial.trim(),
+					regimenFiscal: dto.initialTaxId.regimenFiscal,
+					address: dto.initialTaxId.address ?? null,
+					isDefault: true,
+					isActive: true,
+					rfcValidatedAt: null,
+					rfcValidatedStatus: null,
+					createdAt: now,
+					updatedAt: now,
+				},
+			],
+		};
+	}
 
 	const doc: Omit<OrganizationDocument, "_id"> = {
 		name: dto.name.trim(),
 		slug: dto.slug.toLowerCase().trim(),
-		status: "active", // Valor por defecto al crear una organización
-		fiscalData: dto.fiscalData ?? null,
+		status: "active",
+		fiscalData,
 		contacts: dto.contacts ?? [],
 		settings: {
 			timezone: "America/Mexico_City",
 			distanceUnit: "km",
+			weightUnit: "kg",
+			dimensionUnit: "m",
+			volumeUnit: "m3",
+			temperatureUnit: "C",
 			currency: ["MXN"],
 			gpsUpdateInterval: 30,
 			maxUsers: dto.settings?.maxUsers ?? 10,
@@ -133,6 +189,14 @@ export async function updateOrganization(
 		if (s.timezone !== undefined) setFields["settings.timezone"] = s.timezone;
 		if (s.distanceUnit !== undefined)
 			setFields["settings.distanceUnit"] = s.distanceUnit;
+		if (s.weightUnit !== undefined)
+			setFields["settings.weightUnit"] = s.weightUnit;
+		if (s.dimensionUnit !== undefined)
+			setFields["settings.dimensionUnit"] = s.dimensionUnit;
+		if (s.volumeUnit !== undefined)
+			setFields["settings.volumeUnit"] = s.volumeUnit;
+		if (s.temperatureUnit !== undefined)
+			setFields["settings.temperatureUnit"] = s.temperatureUnit;
 		if (s.currency !== undefined) setFields["settings.currency"] = s.currency;
 		if (s.gpsUpdateInterval !== undefined)
 			setFields["settings.gpsUpdateInterval"] = s.gpsUpdateInterval;
@@ -141,7 +205,6 @@ export async function updateOrganization(
 			setFields["settings.allowedEmailDomains"] = s.allowedEmailDomains;
 		if (s.features !== undefined) setFields["settings.features"] = s.features;
 	}
-	if (dto.fiscalData !== undefined) setFields.fiscalData = dto.fiscalData;
 	if (dto.contacts !== undefined) setFields.contacts = dto.contacts;
 
 	const result = await getOrganizationCollection().findOneAndUpdate(
@@ -167,3 +230,6 @@ export async function softDeleteOrganization(id: string): Promise<void> {
 
 	logger.info({orgId: id}, "Organization soft deleted");
 }
+
+// Re-export para uso externo (taxId.repository necesita findOrganizationById)
+export {toOrganization};
