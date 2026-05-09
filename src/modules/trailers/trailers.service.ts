@@ -17,7 +17,10 @@ import {mapNhtsaResponse, type DecodeVinResponse} from "./helpers/nhtsa-mapper";
 import {normalizePlate} from "./helpers/plate-normalizer";
 import {validateVin} from "./helpers/vin-validator";
 import {
+	findTrailerByEconomicNumber,
 	findTrailerById,
+	findTrailerByPlate,
+	findTrailerByVin,
 	findTrailers,
 	insertTrailer,
 	softDeleteTrailer,
@@ -52,6 +55,96 @@ export async function getTrailer(orgId: string, id: string): Promise<Trailer> {
 	if (!trailer) throw new NotFoundError("Trailer");
 	const [enriched] = await enrichOwnerships(orgId, [trailer]);
 	return enriched ?? trailer;
+}
+
+// ── Check de duplicados (pre-validation del wizard) ──────────────────────
+
+export interface CheckDuplicatesInput {
+	vin?: string | null;
+	plates_mx?: string | null;
+	plates_us?: string | null;
+	economicNumber?: string | null;
+	/** Si se pasa, se ignoran coincidencias con este trailer (modo edit). */
+	excludeTrailerId?: string | null;
+}
+
+export interface DuplicateMatch {
+	field: "vin" | "plates_mx" | "plates_us" | "economicNumber";
+	value: string;
+	trailer: {
+		id: string;
+		vin: string;
+		economicNumber: string | null;
+		plates: {mx: string | null; us: string | null};
+		status: Trailer["status"];
+	};
+}
+
+/**
+ * Busca duplicados de VIN, placas y número económico en la org del usuario.
+ * Devuelve la lista de coincidencias (puede ser vacía si todo está libre).
+ * Excluye soft-deleted (porque al eliminar se libera el VIN/placa/económico).
+ */
+export async function checkTrailerDuplicates(
+	orgId: string,
+	input: CheckDuplicatesInput,
+): Promise<DuplicateMatch[]> {
+	const matches: DuplicateMatch[] = [];
+
+	const tryAdd = (
+		field: DuplicateMatch["field"],
+		value: string,
+		trailer: Trailer | null,
+	): void => {
+		if (!trailer) return;
+		if (input.excludeTrailerId && trailer.id === input.excludeTrailerId) return;
+		matches.push({
+			field,
+			value,
+			trailer: {
+				id: trailer.id,
+				vin: trailer.vin,
+				economicNumber: trailer.economicNumber,
+				plates: {mx: trailer.plates.mx, us: trailer.plates.us},
+				status: trailer.status,
+			},
+		});
+	};
+
+	const lookups: Promise<void>[] = [];
+
+	if (input.vin) {
+		const vin = input.vin.toUpperCase().trim();
+		if (vin.length === 17) {
+			lookups.push(
+				findTrailerByVin(orgId, vin).then((t) => tryAdd("vin", vin, t)),
+			);
+		}
+	}
+	if (input.plates_mx) {
+		const plate = input.plates_mx.toUpperCase().trim();
+		lookups.push(
+			findTrailerByPlate(orgId, "mx", plate).then((t) => tryAdd("plates_mx", plate, t)),
+		);
+	}
+	if (input.plates_us) {
+		const plate = input.plates_us.toUpperCase().trim();
+		lookups.push(
+			findTrailerByPlate(orgId, "us", plate).then((t) => tryAdd("plates_us", plate, t)),
+		);
+	}
+	if (input.economicNumber) {
+		const eco = input.economicNumber.trim();
+		lookups.push(
+			findTrailerByEconomicNumber(orgId, eco).then((t) =>
+				tryAdd("economicNumber", eco, t),
+			),
+		);
+	}
+
+	await Promise.all(lookups);
+
+	return matches;
 }
 
 /**
@@ -198,6 +291,7 @@ export async function createTrailer(
 		interiorHeightMeters: dto.interiorHeightMeters ?? null,
 
 		ownership,
+		documents: [],
 
 		createdBy: new ObjectId(actorId),
 		updatedBy: new ObjectId(actorId),
@@ -310,6 +404,7 @@ export async function quickRegisterTrailer(
 		interiorHeightMeters: null,
 
 		ownership,
+		documents: [],
 
 		createdBy: new ObjectId(actorId),
 		updatedBy: new ObjectId(actorId),

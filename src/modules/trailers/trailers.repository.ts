@@ -26,7 +26,10 @@ function toOwnership(
 }
 
 function toTrailer(doc: TrailerDocument): Trailer {
-	const {_id, orgId, createdBy, updatedBy, ownership, ...rest} = doc;
+	// `documents` se omite del dominio Trailer; se accede vía el endpoint
+	// dedicado GET /trailers/:trailerId/documents.
+	const {_id, orgId, createdBy, updatedBy, ownership, documents: _docs, ...rest} = doc;
+	void _docs;
 	return {
 		...rest,
 		id: _id.toHexString(),
@@ -67,10 +70,17 @@ export async function findTrailers(
 	const page = filter.page ?? 1;
 	const skip = (page - 1) * limit;
 
+	// Sort dinámico — si se pide, lo aplica; si no, default por createdAt desc.
+	// El validator restringe sortField a valores seguros (no risk de inyección).
+	const sortDir = filter.sortDirection === "desc" ? -1 : 1;
+	const sortSpec: Record<string, 1 | -1> = filter.sortField
+		? {[filter.sortField]: sortDir}
+		: {createdAt: -1};
+
 	const [docs, total] = await Promise.all([
 		getTrailerCollection()
 			.find(query)
-			.sort({createdAt: -1})
+			.sort(sortSpec)
 			.skip(skip)
 			.limit(limit)
 			.toArray(),

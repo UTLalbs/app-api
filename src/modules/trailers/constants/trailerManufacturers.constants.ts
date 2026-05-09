@@ -36,6 +36,7 @@ export const TRAILER_MANUFACTURERS: TrailerManufacturerCatalogEntry[] = [
 	{code: "COZAD", name: "Cozad", country: "US"},
 	{code: "TIMPTE", name: "Timpte", country: "US"},
 	{code: "MERRITT", name: "Merritt Equipment", country: "US"},
+	{code: "FRUEHAUF", name: "Fruehauf", country: "US", aliases: ["Fruehauf Trailer Corporation"]},
 	// México
 	{code: "LUFKIN_MX", name: "Lufkin de México", country: "MX", aliases: ["Lufkin"]},
 	{code: "CIMSA", name: "CIMSA", country: "MX"},

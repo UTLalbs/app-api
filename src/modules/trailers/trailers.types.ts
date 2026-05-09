@@ -1,5 +1,7 @@
 import type {ObjectId} from "mongodb";
 
+import type {TrailerDocumentEmbedded} from "./documents/trailer-documents.types";
+
 // ── Enums de dominio ──────────────────────────────────────────────────────
 
 export type TrailerStatus =
@@ -142,6 +144,9 @@ export interface TrailerDocument {
 	// ── BLOQUE D: Propiedad y régimen ───────────────────────────────
 	ownership: TrailerOwnershipDocument;
 
+	// ── BLOQUE E: Documentos del expediente (embebidos) ─────────────
+	documents: TrailerDocumentEmbedded[];
+
 	// ── Auditoría / soft delete ─────────────────────────────────────
 	createdBy: ObjectId;
 	updatedBy: ObjectId;
@@ -181,13 +186,16 @@ export interface TrailerOwnership {
 export interface Trailer
 	extends Omit<
 		TrailerDocument,
-		"_id" | "orgId" | "createdBy" | "updatedBy" | "ownership"
+		"_id" | "orgId" | "createdBy" | "updatedBy" | "ownership" | "documents"
 	> {
 	id: string;
 	orgId: string;
 	createdBy: string;
 	updatedBy: string;
 	ownership: TrailerOwnership;
+	// `documents` no se incluye en el dominio Trailer; se accede vía
+	// el endpoint dedicado GET /trailers/:trailerId/documents para no
+	// inflar payloads del listado.
 }
 
 // ── DTOs ──────────────────────────────────────────────────────────────────
@@ -298,6 +306,8 @@ export interface TrailerQueryFilter {
 	search?: string;
 	page?: number;
 	limit?: number;
+	sortField?: string;
+	sortDirection?: "asc" | "desc";
 }
 
 export interface TransitionStatusDto {

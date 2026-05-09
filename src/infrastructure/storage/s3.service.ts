@@ -2,6 +2,9 @@ import {
 	PutObjectCommand,
 	DeleteObjectCommand,
 	GetObjectCommand,
+	CopyObjectCommand,
+	HeadObjectCommand,
+	ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
@@ -149,6 +152,79 @@ export async function getPresignedUrl(
       'S3_PRESIGN_ERROR',
     );
   }
+}
+
+// ── Copy (server-side, no descarga ni resube) ─────────────────────────────
+
+export async function copyFile(
+  sourceKey: string,
+  destKey: string,
+): Promise<UploadResult> {
+  try {
+    await getS3Client().send(
+      new CopyObjectCommand({
+        Bucket:     env.S3_BUCKET_NAME,
+        CopySource: `${env.S3_BUCKET_NAME}/${encodeURIComponent(sourceKey)}`,
+        Key:        destKey,
+      }),
+    );
+
+    // Para devolver fileSize/mimeType del nuevo objeto, hacemos HEAD
+    const head = await getS3Client().send(
+      new HeadObjectCommand({ Bucket: env.S3_BUCKET_NAME, Key: destKey }),
+    );
+
+    const url = `https://${env.S3_BUCKET_NAME}.s3.${env.S3_REGION}.amazonaws.com/${destKey}`;
+    const fileSize = head.ContentLength ?? 0;
+    const mimeType = head.ContentType ?? 'application/octet-stream';
+
+    logger.info({ sourceKey, destKey, fileSize }, 'File copied in S3');
+
+    return { key: destKey, url, fileSize, mimeType };
+  } catch (err) {
+    logger.error({ err, sourceKey, destKey }, 'S3 copy failed');
+    throw new AppError(
+      'Error al asociar el archivo. Intenta de nuevo.',
+      502,
+      'S3_COPY_ERROR',
+    );
+  }
+}
+
+// ── List (paginado, para cleanup) ─────────────────────────────────────────
+
+export interface ListedObject {
+  key:          string;
+  size:         number;
+  lastModified: Date;
+}
+
+export async function listObjects(prefix: string): Promise<ListedObject[]> {
+  const all: ListedObject[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const result = await getS3Client().send(
+      new ListObjectsV2Command({
+        Bucket:            env.S3_BUCKET_NAME,
+        Prefix:            prefix,
+        ContinuationToken: continuationToken,
+      }),
+    );
+
+    for (const obj of result.Contents ?? []) {
+      if (!obj.Key || !obj.LastModified) continue;
+      all.push({
+        key:          obj.Key,
+        size:         obj.Size ?? 0,
+        lastModified: obj.LastModified,
+      });
+    }
+
+    continuationToken = result.IsTruncated ? result.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return all;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────

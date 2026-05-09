@@ -12,6 +12,8 @@ import {closeAuditQueue} from "./infrastructure/jobs/audit.queue";
 import {startAuditWorker, stopAuditWorker} from "./infrastructure/jobs/audit.worker";
 import {registerCatalogsSyncJob, runCatalogsSync} from "./infrastructure/jobs/catalogs-sync.job";
 import {registerEmployeeAlertsJob} from "./infrastructure/jobs/employee.alerts.job";
+import {registerTrailerAlertsJob} from "./infrastructure/jobs/trailer-alerts.job";
+import {registerTrailerDraftsCleanupJob} from "./infrastructure/jobs/trailer-drafts-cleanup.job";
 import {createBusinessPartnersIndexes} from "./modules/business-partners/business-partners.model";
 import {createTrailerIndexes} from "./modules/trailers/trailers.model";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
@@ -62,6 +64,8 @@ async function bootstrap(): Promise<void> {
 		createBusinessPartnersIndexes(),
 		createTrailerIndexes(),
 		registerEmployeeAlertsJob(),
+		registerTrailerAlertsJob(),
+		registerTrailerDraftsCleanupJob(),
 	]);
 
 	// Seed — crea o actualiza roles del sistema

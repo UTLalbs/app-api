@@ -361,6 +361,16 @@ export const decodeVinSchema = z.object({
 	}),
 });
 
+export const checkDuplicateSchema = z.object({
+	body: z.object({
+		vin: z.string().min(1).max(17).nullable().optional(),
+		plates_mx: z.string().min(1).max(20).nullable().optional(),
+		plates_us: z.string().min(1).max(20).nullable().optional(),
+		economicNumber: z.string().min(1).max(40).nullable().optional(),
+		excludeTrailerId: z.string().length(24).nullable().optional(),
+	}),
+});
+
 export const listTrailersSchema = z.object({
 	query: z.object({
 		status: trailerStatusSchema.optional(),
@@ -369,6 +379,18 @@ export const listTrailersSchema = z.object({
 		search: z.string().max(200).optional(),
 		page: z.coerce.number().min(1).optional(),
 		limit: z.coerce.number().min(1).max(100).optional(),
+		sortField: z
+			.enum([
+				"economicNumber",
+				"vin",
+				"createdAt",
+				"updatedAt",
+				"modelYear",
+				"status",
+				"ctrSubtype",
+			])
+			.optional(),
+		sortDirection: z.enum(["asc", "desc"]).optional(),
 	}),
 });
 

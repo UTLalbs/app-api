@@ -88,6 +88,11 @@ const envSchema = z.object({
 	// Audit archive (cold storage) — opcional; sin bucket el job se omite.
 	AUDIT_ARCHIVE_BUCKET: z.string().min(1).optional(),
 
+	// Anthropic (Claude) — extracción de PDF para documentos del remolque.
+	// Si la key no está, el extract devuelve fallback (no rompe el upload).
+	ANTHROPIC_API_KEY: z.string().min(1).optional(),
+	ANTHROPIC_MODEL: z.string().min(1).default("claude-haiku-4-5"),
+
 	// Encryption
 	ENCRYPTION_KEY: z
 		.string()

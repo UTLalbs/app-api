@@ -77,6 +77,18 @@ export async function createTrailerIndexes(): Promise<void> {
 			name: "orgId_ownership_internalTaxIdId",
 			sparse: true,
 		},
+		// Lookup de un documento por id (multikey sobre el array embebido)
+		{
+			key: {orgId: 1, "documents._id": 1},
+			name: "orgId_documents_id",
+			sparse: true,
+		},
+		// Job de alertas: docs por vencer (multikey con expiresAt)
+		{
+			key: {orgId: 1, "documents.expiresAt": 1},
+			name: "orgId_documents_expiresAt",
+			sparse: true,
+		},
 	]);
 
 	logger.info("✅  Trailer indexes created");

@@ -62,6 +62,10 @@ export type AuditAction =
   | 'trailer_decommissioned'
   | 'trailer_returned_to_partner'
   | 'trailer_deleted'
+  | 'trailer_document_uploaded'
+  | 'trailer_document_updated'
+  | 'trailer_document_replaced'
+  | 'trailer_document_deleted'
   // tasks
   | 'task_created'
   | 'task_updated'

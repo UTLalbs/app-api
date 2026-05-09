@@ -4,6 +4,7 @@ import {asyncHandler} from "../../shared/utils/asyncHandler";
 import {buildAuditContext} from "../../shared/utils/auditContext";
 
 import {
+	checkTrailerDuplicates,
 	createTrailer,
 	decodeTrailerVin,
 	deleteTrailer,
@@ -36,6 +37,8 @@ export const listTrailersHandler = asyncHandler(
 			search?: string;
 			page?: number;
 			limit?: number;
+			sortField?: string;
+			sortDirection?: "asc" | "desc";
 		};
 		const {trailers, total} = await listTrailers(orgId, {
 			status: q.status as never,
@@ -44,6 +47,8 @@ export const listTrailersHandler = asyncHandler(
 			search: q.search,
 			page: q.page,
 			limit: q.limit,
+			sortField: q.sortField,
+			sortDirection: q.sortDirection,
 		});
 		res.json({success: true, data: trailers, meta: {total}});
 	},
@@ -120,6 +125,21 @@ export const decodeVinHandler = asyncHandler(
 	async (req: Request, res: Response) => {
 		const result = await decodeTrailerVin(String(req.body.vin));
 		res.json({success: true, data: result});
+	},
+);
+
+// ── POST /api/v1/trailers/check-duplicate ─────────────────────────────────
+
+export const checkDuplicateHandler = asyncHandler(
+	async (req: Request, res: Response) => {
+		const matches = await checkTrailerDuplicates(getOrgId(req), {
+			vin: req.body.vin ?? null,
+			plates_mx: req.body.plates_mx ?? null,
+			plates_us: req.body.plates_us ?? null,
+			economicNumber: req.body.economicNumber ?? null,
+			excludeTrailerId: req.body.excludeTrailerId ?? null,
+		});
+		res.json({success: true, data: {matches}});
 	},
 );
 
