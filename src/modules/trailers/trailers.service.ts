@@ -3,6 +3,13 @@ import {ObjectId} from "mongodb";
 import {logger} from "../../config/logger";
 import {decodeVinValues} from "../../infrastructure/http/nhtsaClient";
 import {
+	deleteFile,
+	extractKeyFromUrl,
+	generateS3Key,
+	uploadFile,
+	validateFile,
+} from "../../infrastructure/storage/s3.service";
+import {
 	NotFoundError,
 	ValidationError,
 } from "../../shared/errors/AppError";
@@ -34,6 +41,7 @@ import type {
 	TrailerDocument,
 	TrailerOwnershipDocument,
 	TrailerOwnershipInput,
+	TrailerPhotoPosition,
 	TrailerQueryFilter,
 	TrailerStatus,
 	UpdateTrailerDto,
@@ -291,6 +299,7 @@ export async function createTrailer(
 		interiorHeightMeters: dto.interiorHeightMeters ?? null,
 
 		ownership,
+		photos: {leftSide: null, rightSide: null, rear: null, couplingFront: null},
 		documents: [],
 
 		createdBy: new ObjectId(actorId),
@@ -404,6 +413,7 @@ export async function quickRegisterTrailer(
 		interiorHeightMeters: null,
 
 		ownership,
+		photos: {leftSide: null, rightSide: null, rear: null, couplingFront: null},
 		documents: [],
 
 		createdBy: new ObjectId(actorId),
@@ -813,6 +823,105 @@ async function buildOwnershipDocument(
 				: null,
 		contract,
 	};
+}
+
+// ── Fotos (4 slots: lados, trasero, acoplamiento) ────────────────────────
+
+export async function setTrailerPhoto(
+	orgId: string,
+	trailerId: string,
+	actorId: string,
+	position: TrailerPhotoPosition,
+	file: Express.Multer.File,
+	context: AuditContext,
+): Promise<Trailer> {
+	const existing = await findTrailerById(orgId, trailerId);
+	if (!existing) throw new NotFoundError("Trailer");
+
+	validateFile(file.mimetype, file.size);
+	if (!file.mimetype.startsWith("image/")) {
+		throw new ValidationError("Solo se aceptan imágenes (JPG, PNG)");
+	}
+
+	const key = generateS3Key(
+		"trailers",
+		orgId,
+		trailerId,
+		"photos",
+		`${position}-${Date.now()}-${file.originalname}`,
+	);
+	const upload = await uploadFile(key, file.buffer, file.mimetype);
+
+	const previous = existing.photos[position];
+
+	const now = new Date();
+	const updated = await updateTrailerFields(orgId, trailerId, {
+		[`photos.${position}`]: {
+			fileUrl: upload.url,
+			fileSize: upload.fileSize,
+			mimeType: upload.mimeType,
+			uploadedAt: now,
+			uploadedBy: new ObjectId(actorId),
+		},
+		updatedBy: new ObjectId(actorId),
+	} as Partial<TrailerDocument>);
+	if (!updated) throw new NotFoundError("Trailer");
+
+	if (previous?.fileUrl) {
+		void deleteFile(extractKeyFromUrl(previous.fileUrl));
+	}
+
+	logger.info({orgId, trailerId, position, key}, "Trailer photo uploaded");
+
+	await emitAuditEvent({
+		category: "trailers",
+		action: "trailer_photo_uploaded",
+		target: {type: "trailer", id: trailerId, displayName: updated.vin},
+		metadata: {
+			position,
+			fileSize: upload.fileSize,
+			replacedPrevious: !!previous,
+		},
+		context,
+	});
+
+	return updated;
+}
+
+export async function removeTrailerPhoto(
+	orgId: string,
+	trailerId: string,
+	actorId: string,
+	position: TrailerPhotoPosition,
+	context: AuditContext,
+): Promise<Trailer> {
+	const existing = await findTrailerById(orgId, trailerId);
+	if (!existing) throw new NotFoundError("Trailer");
+
+	const previous = existing.photos[position];
+	if (!previous) {
+		throw new ValidationError(`No hay foto ${position} para eliminar`);
+	}
+
+	const updated = await updateTrailerFields(orgId, trailerId, {
+		[`photos.${position}`]: null,
+		updatedBy: new ObjectId(actorId),
+	} as Partial<TrailerDocument>);
+	if (!updated) throw new NotFoundError("Trailer");
+
+	void deleteFile(extractKeyFromUrl(previous.fileUrl));
+
+	logger.info({orgId, trailerId, position}, "Trailer photo removed");
+
+	await emitAuditEvent({
+		category: "trailers",
+		action: "trailer_photo_deleted",
+		target: {type: "trailer", id: trailerId, displayName: updated.vin},
+		metadata: {position, previousFileUrl: previous.fileUrl},
+		context,
+	});
+
+	return updated;
 }
 
 /**

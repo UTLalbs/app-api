@@ -83,6 +83,51 @@ export interface TrailerOwnershipDocument {
 	contract: TrailerContractDocument | null;
 }
 
+// ── Foto del remolque (un slot por posición) ─────────────────────────────
+
+export type TrailerPhotoPosition =
+	| "leftSide"
+	| "rightSide"
+	| "rear"
+	| "couplingFront";
+
+export const TRAILER_PHOTO_POSITIONS: readonly TrailerPhotoPosition[] = [
+	"leftSide",
+	"rightSide",
+	"rear",
+	"couplingFront",
+] as const;
+
+export interface TrailerPhotoDocument {
+	fileUrl: string;
+	fileSize: number;
+	mimeType: string;
+	uploadedAt: Date;
+	uploadedBy: ObjectId;
+}
+
+export interface TrailerPhotosDocument {
+	leftSide: TrailerPhotoDocument | null;
+	rightSide: TrailerPhotoDocument | null;
+	rear: TrailerPhotoDocument | null;
+	couplingFront: TrailerPhotoDocument | null;
+}
+
+export interface TrailerPhotoView {
+	fileUrl: string;
+	fileSize: number;
+	mimeType: string;
+	uploadedAt: Date;
+	uploadedBy: string;
+}
+
+export interface TrailerPhotos {
+	leftSide: TrailerPhotoView | null;
+	rightSide: TrailerPhotoView | null;
+	rear: TrailerPhotoView | null;
+	couplingFront: TrailerPhotoView | null;
+}
+
 // ── Documento Mongo ────────────────────────────────────────────────────────
 
 export interface TrailerDocument {
@@ -144,7 +189,10 @@ export interface TrailerDocument {
 	// ── BLOQUE D: Propiedad y régimen ───────────────────────────────
 	ownership: TrailerOwnershipDocument;
 
-	// ── BLOQUE E: Documentos del expediente (embebidos) ─────────────
+	// ── BLOQUE E: Fotos (4 slots fijos: lados, trasero, acoplamiento) ─
+	photos: TrailerPhotosDocument;
+
+	// ── BLOQUE F: Documentos del expediente (embebidos) ─────────────
 	documents: TrailerDocumentEmbedded[];
 
 	// ── Auditoría / soft delete ─────────────────────────────────────
@@ -186,13 +234,20 @@ export interface TrailerOwnership {
 export interface Trailer
 	extends Omit<
 		TrailerDocument,
-		"_id" | "orgId" | "createdBy" | "updatedBy" | "ownership" | "documents"
+		| "_id"
+		| "orgId"
+		| "createdBy"
+		| "updatedBy"
+		| "ownership"
+		| "documents"
+		| "photos"
 	> {
 	id: string;
 	orgId: string;
 	createdBy: string;
 	updatedBy: string;
 	ownership: TrailerOwnership;
+	photos: TrailerPhotos;
 	// `documents` no se incluye en el dominio Trailer; se accede vía
 	// el endpoint dedicado GET /trailers/:trailerId/documents para no
 	// inflar payloads del listado.

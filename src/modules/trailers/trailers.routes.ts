@@ -34,6 +34,8 @@ import {
 	getTrailerHandler,
 	listTrailersHandler,
 	quickRegisterTrailerHandler,
+	removeTrailerPhotoHandler,
+	setTrailerPhotoHandler,
 	transitionStatusHandler,
 	updateTrailerHandler,
 } from "./trailers.controller";
@@ -44,6 +46,7 @@ import {
 	listTrailersSchema,
 	quickRegisterTrailerSchema,
 	trailerIdParamSchema,
+	trailerPhotoParamSchema,
 	transitionStatusSchema,
 	updateTrailerSchema,
 } from "./trailers.validator";
@@ -121,6 +124,22 @@ trailersRouter.post(
 	validate(transitionStatusSchema),
 	authorize("trailers", "update"),
 	transitionStatusHandler,
+);
+
+// Fotos del remolque — 4 slots fijos: leftSide, rightSide, rear, couplingFront
+trailersRouter.post(
+	"/:id/photos/:position",
+	upload.single("file"),
+	validate(trailerPhotoParamSchema),
+	authorize("trailers", "update"),
+	setTrailerPhotoHandler,
+);
+
+trailersRouter.delete(
+	"/:id/photos/:position",
+	validate(trailerPhotoParamSchema),
+	authorize("trailers", "update"),
+	removeTrailerPhotoHandler,
 );
 
 // ── Documents ─────────────────────────────────────────────────────────────

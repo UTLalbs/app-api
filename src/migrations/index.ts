@@ -1,5 +1,6 @@
 import {migration as m001OrganizationsTaxIds} from "./001-organizations-tax-ids";
 import {migration as m002OrganizationsUnitSettings} from "./002-organizations-unit-settings";
+import {migration as m003TrailersPhotosInit} from "./003-trailers-photos-init";
 
 export interface Migration {
 	/** Nombre único e inmutable. Se persiste en la colección `_migrations`. */
@@ -22,4 +23,5 @@ export interface Migration {
 export const migrations: Migration[] = [
 	m001OrganizationsTaxIds,
 	m002OrganizationsUnitSettings,
+	m003TrailersPhotosInit,
 ];

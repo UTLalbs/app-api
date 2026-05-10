@@ -11,12 +11,15 @@ import {
 	getTrailer,
 	listTrailers,
 	quickRegisterTrailer,
+	removeTrailerPhoto,
+	setTrailerPhoto,
 	transitionTrailerStatus,
 	updateTrailer,
 } from "./trailers.service";
 import type {
 	CreateTrailerDto,
 	QuickRegisterTrailerDto,
+	TrailerPhotoPosition,
 	UpdateTrailerDto,
 } from "./trailers.types";
 
@@ -153,6 +156,44 @@ export const transitionStatusHandler = asyncHandler(
 			req.user!.id,
 			req.body.newStatus,
 			req.body.reason ?? null,
+			buildAuditContext(req),
+		);
+		res.json({success: true, data: trailer});
+	},
+);
+
+// ── POST /api/v1/trailers/:id/photos/:position ────────────────────────────
+
+export const setTrailerPhotoHandler = asyncHandler(
+	async (req: Request, res: Response) => {
+		if (!req.file) {
+			res.status(400).json({
+				success: false,
+				error: {code: "VALIDATION_ERROR", message: "No file provided"},
+			});
+			return;
+		}
+		const trailer = await setTrailerPhoto(
+			getOrgId(req),
+			String(req.params.id),
+			req.user!.id,
+			req.params.position as TrailerPhotoPosition,
+			req.file,
+			buildAuditContext(req),
+		);
+		res.json({success: true, data: trailer});
+	},
+);
+
+// ── DELETE /api/v1/trailers/:id/photos/:position ──────────────────────────
+
+export const removeTrailerPhotoHandler = asyncHandler(
+	async (req: Request, res: Response) => {
+		const trailer = await removeTrailerPhoto(
+			getOrgId(req),
+			String(req.params.id),
+			req.user!.id,
+			req.params.position as TrailerPhotoPosition,
 			buildAuditContext(req),
 		);
 		res.json({success: true, data: trailer});

@@ -67,6 +67,8 @@ export type AuditAction =
   | 'trailer_document_updated'
   | 'trailer_document_replaced'
   | 'trailer_document_deleted'
+  | 'trailer_photo_uploaded'
+  | 'trailer_photo_deleted'
   // units (motorizadas)
   | 'unit_created'
   | 'unit_quick_registered'

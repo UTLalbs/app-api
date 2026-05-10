@@ -394,6 +394,13 @@ export const listTrailersSchema = z.object({
 	}),
 });
 
+export const trailerPhotoParamSchema = z.object({
+	params: z.object({
+		id: z.string().length(24),
+		position: z.enum(["leftSide", "rightSide", "rear", "couplingFront"]),
+	}),
+});
+
 // ── Tipos inferidos ────────────────────────────────────────────────────────
 
 export type CreateTrailerInput = z.infer<typeof createTrailerSchema>;

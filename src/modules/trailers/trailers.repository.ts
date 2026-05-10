@@ -7,6 +7,10 @@ import type {
 	Trailer,
 	TrailerDocument,
 	TrailerOwnership,
+	TrailerPhotoDocument,
+	TrailerPhotoView,
+	TrailerPhotos,
+	TrailerPhotosDocument,
 	TrailerQueryFilter,
 } from "./trailers.types";
 
@@ -25,10 +29,46 @@ function toOwnership(
 	};
 }
 
+function toPhoto(p: TrailerPhotoDocument | null): TrailerPhotoView | null {
+	if (!p) return null;
+	return {
+		fileUrl: p.fileUrl,
+		fileSize: p.fileSize,
+		mimeType: p.mimeType,
+		uploadedAt: p.uploadedAt,
+		uploadedBy: p.uploadedBy.toHexString(),
+	};
+}
+
+function toPhotos(doc: TrailerPhotosDocument | undefined | null): TrailerPhotos {
+	const empty: TrailerPhotos = {
+		leftSide: null,
+		rightSide: null,
+		rear: null,
+		couplingFront: null,
+	};
+	if (!doc) return empty;
+	return {
+		leftSide: toPhoto(doc.leftSide),
+		rightSide: toPhoto(doc.rightSide),
+		rear: toPhoto(doc.rear),
+		couplingFront: toPhoto(doc.couplingFront),
+	};
+}
+
 function toTrailer(doc: TrailerDocument): Trailer {
 	// `documents` se omite del dominio Trailer; se accede vía el endpoint
 	// dedicado GET /trailers/:trailerId/documents.
-	const {_id, orgId, createdBy, updatedBy, ownership, documents: _docs, ...rest} = doc;
+	const {
+		_id,
+		orgId,
+		createdBy,
+		updatedBy,
+		ownership,
+		documents: _docs,
+		photos,
+		...rest
+	} = doc;
 	void _docs;
 	return {
 		...rest,
@@ -37,6 +77,7 @@ function toTrailer(doc: TrailerDocument): Trailer {
 		createdBy: createdBy.toHexString(),
 		updatedBy: updatedBy.toHexString(),
 		ownership: toOwnership(ownership),
+		photos: toPhotos(photos),
 	};
 }
 
