@@ -14,8 +14,11 @@ import {registerCatalogsSyncJob, runCatalogsSync} from "./infrastructure/jobs/ca
 import {registerEmployeeAlertsJob} from "./infrastructure/jobs/employee.alerts.job";
 import {registerTrailerAlertsJob} from "./infrastructure/jobs/trailer-alerts.job";
 import {registerTrailerDraftsCleanupJob} from "./infrastructure/jobs/trailer-drafts-cleanup.job";
+import {registerUnitAlertsJob} from "./infrastructure/jobs/unit-alerts.job";
+import {registerUnitDraftsCleanupJob} from "./infrastructure/jobs/unit-drafts-cleanup.job";
 import {createBusinessPartnersIndexes} from "./modules/business-partners/business-partners.model";
 import {createTrailerIndexes} from "./modules/trailers/trailers.model";
+import {createUnitIndexes} from "./modules/units/units.model";
 import {initGoogleStrategy} from "./modules/auth/strategies/google.strategy";
 import {initMicrosoftStrategy} from "./modules/auth/strategies/microsoft.strategy";
 import {createAbsenceIndexes} from "./modules/hr/absences/absence.model";
@@ -63,9 +66,12 @@ async function bootstrap(): Promise<void> {
 		createTimeClockIndexes(),
 		createBusinessPartnersIndexes(),
 		createTrailerIndexes(),
+		createUnitIndexes(),
 		registerEmployeeAlertsJob(),
 		registerTrailerAlertsJob(),
 		registerTrailerDraftsCleanupJob(),
+		registerUnitAlertsJob(),
+		registerUnitDraftsCleanupJob(),
 	]);
 
 	// Seed — crea o actualiza roles del sistema

@@ -8,6 +8,7 @@ export type AuditCategory =
   | 'organizations'
   | 'business_partners'  // socios comerciales (arrendadores, exchange partners)
   | 'trailers'           // remolques / semirremolques
+  | 'units'              // unidades motorizadas (tractocamiones, unitarios, etc.)
   | 'tasks'
   | 'employees'
   | 'schedules'      // plantillas de turnos + asignaciones
@@ -66,6 +67,22 @@ export type AuditAction =
   | 'trailer_document_updated'
   | 'trailer_document_replaced'
   | 'trailer_document_deleted'
+  // units (motorizadas)
+  | 'unit_created'
+  | 'unit_quick_registered'
+  | 'unit_updated'
+  | 'unit_status_changed'
+  | 'unit_decommissioned'
+  | 'unit_returned_to_partner'
+  | 'unit_deleted'
+  | 'unit_operator_assigned'
+  | 'unit_operator_unassigned'
+  | 'unit_photo_uploaded'
+  | 'unit_photo_deleted'
+  | 'unit_document_uploaded'
+  | 'unit_document_updated'
+  | 'unit_document_replaced'
+  | 'unit_document_deleted'
   // tasks
   | 'task_created'
   | 'task_updated'

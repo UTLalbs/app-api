@@ -30,6 +30,7 @@ import {roleRouter} from "./modules/roles/role.routes";
 import {satRouter} from "./modules/sat/sat.routes";
 import {taskRouter} from "./modules/tasks/task.routes";
 import {trailersRouter} from "./modules/trailers/trailers.routes";
+import {unitsRouter} from "./modules/units/units.routes";
 import {userRouter} from "./modules/users/user.routes";
 
 export function createApp(httpLogger: RequestHandler): express.Application {
@@ -92,6 +93,7 @@ export function createApp(httpLogger: RequestHandler): express.Application {
 	app.use("/api/v1/catalogs", apiLimiter, catalogsRouter);
 	app.use("/api/v1/business-partners", apiLimiter, businessPartnersRouter);
 	app.use("/api/v1/trailers", apiLimiter, trailersRouter);
+	app.use("/api/v1/units", apiLimiter, unitsRouter);
 	app.use("/api/v1/tasks", apiLimiter, taskRouter);
 	app.use("/api/v1/notifications", apiLimiter, notificationRouter);
 	app.use("/api/v1/employees", apiLimiter, employeeRouter);

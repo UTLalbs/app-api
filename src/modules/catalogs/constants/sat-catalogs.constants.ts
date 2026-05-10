@@ -15,6 +15,8 @@ export const SAT_CATALOG_KEYS = [
 	"c_RegimenFiscal",
 	"c_ConfigAutotransporte",
 	"c_SubTipoRem",
+	"c_TipoPermiso",
+	"c_TipoCombustible",
 ] as const;
 
 export type SatCatalogKey = (typeof SAT_CATALOG_KEYS)[number];

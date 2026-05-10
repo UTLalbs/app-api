@@ -3,7 +3,6 @@ import {ObjectId} from "mongodb";
 import {randomUUID} from "node:crypto";
 
 import {logger} from "../../../config/logger";
-import {extractTrailerDocument} from "./trailer-extraction.config";
 import {
 	copyFile,
 	deleteFile,
@@ -21,73 +20,71 @@ import {emitAuditEvent} from "../../audit/audit.service";
 import type {AuditContext} from "../../audit/audit.types";
 
 import {
-	TRAILER_DOCUMENT_TYPE_CONFIG,
-	type TrailerDocumentType,
-} from "../constants/trailerDocumentTypes.constants";
-import {findTrailerById} from "../trailers.repository";
+	UNIT_DOCUMENT_TYPE_CONFIG,
+	type UnitDocumentType,
+} from "../constants/unitDocumentTypes.constants";
+import {findUnitById} from "../units.repository";
 
+import {extractUnitDocument} from "./unit-extraction.config";
 import {
-	countDocumentsByTrailer,
+	countDocumentsByUnit,
 	findDocumentById,
-	findDocumentsByTrailer,
-	insertTrailerDocument,
+	findDocumentsByUnit,
+	insertUnitDocument,
 	replaceDocumentFile,
 	softDeleteDocument,
 	updateDocumentFields,
-} from "./trailer-documents.repository";
+} from "./unit-documents.repository";
 import type {
-	CreateDocumentFromDraftDto,
-	ExtractAndStashResult,
-	ExtractionResult,
-	TrailerDocument,
-	TrailerDocumentEmbedded,
-	UpdateTrailerDocumentDto,
-	UploadTrailerDocumentDto,
-} from "./trailer-documents.types";
+	CreateUnitDocumentFromDraftDto,
+	ExtractAndStashUnitDocumentResult,
+	UnitDocument,
+	UnitDocumentEmbedded,
+	UnitExtractionResult,
+	UpdateUnitDocumentDto,
+	UploadUnitDocumentDto,
+} from "./unit-documents.types";
 
 // Prefijo S3 para archivos en zona "draft" (subidos en /extract antes de
-// que el trailer exista). El cron de cleanup borra los > 24 h.
-const DRAFT_PREFIX = "trailers-pending";
+// que la unidad exista). El cron de cleanup borra los > 24 h.
+const DRAFT_PREFIX = "units-pending";
 
 // ── Lectura ────────────────────────────────────────────────────────────────
 
-export async function listTrailerDocuments(
+export async function listUnitDocuments(
 	orgId: string,
-	trailerId: string,
-): Promise<TrailerDocument[]> {
-	const trailer = await findTrailerById(orgId, trailerId);
-	if (!trailer) throw new NotFoundError("Trailer");
+	unitId: string,
+): Promise<UnitDocument[]> {
+	const unit = await findUnitById(orgId, unitId);
+	if (!unit) throw new NotFoundError("Unit");
 
-	return findDocumentsByTrailer(orgId, trailerId);
+	return findDocumentsByUnit(orgId, unitId);
 }
 
-export async function getTrailerDocument(
+export async function getUnitDocument(
 	orgId: string,
 	id: string,
-): Promise<TrailerDocument> {
+): Promise<UnitDocument> {
 	const doc = await findDocumentById(orgId, id);
-	if (!doc) throw new NotFoundError("TrailerDocument");
+	if (!doc) throw new NotFoundError("UnitDocument");
 	return doc;
 }
 
-export async function getTrailerDocumentSignedUrl(
+export async function getUnitDocumentSignedUrl(
 	orgId: string,
 	id: string,
 ): Promise<{url: string; expiresAt: Date}> {
-	const doc = await getTrailerDocument(orgId, id);
+	const doc = await getUnitDocument(orgId, id);
 	const key = extractKeyFromUrl(doc.fileUrl);
 	return getPresignedUrl(key, 3600);
 }
 
 // ── Extract + stash (preview en wizard) ───────────────────────────────────
-// El archivo se sube a S3 a `trailers-pending/{orgId}/...` para evitar
-// que el cliente lo re-suba al crear el trailer. El cron lo limpia si
-// el wizard se abandona.
 
 export async function extractAndStashDocument(
 	orgId: string,
 	file: Express.Multer.File,
-): Promise<ExtractAndStashResult> {
+): Promise<ExtractAndStashUnitDocumentResult> {
 	validateFile(file.mimetype, file.size);
 
 	const sanitizedName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -101,7 +98,7 @@ export async function extractAndStashDocument(
 
 	logger.info(
 		{orgId, draftKey, type: extraction.type, confidence: extraction.confidence},
-		"Trailer document drafted",
+		"Unit document drafted",
 	);
 
 	return {
@@ -115,9 +112,9 @@ export async function extractAndStashDocument(
 	};
 }
 
-async function runExtraction(file: Express.Multer.File): Promise<ExtractionResult> {
+async function runExtraction(file: Express.Multer.File): Promise<UnitExtractionResult> {
 	try {
-		return await extractTrailerDocument(file.buffer, file.mimetype);
+		return await extractUnitDocument(file.buffer, file.mimetype);
 	} catch (err) {
 		logger.warn({err}, "Anthropic extraction failed — returning fallback");
 		return {
@@ -142,16 +139,16 @@ export async function discardDocumentDraft(
 
 // ── Upload ─────────────────────────────────────────────────────────────────
 
-export async function uploadTrailerDocument(
+export async function uploadUnitDocument(
 	orgId: string,
-	trailerId: string,
+	unitId: string,
 	actorId: string,
 	file: Express.Multer.File,
-	dto: UploadTrailerDocumentDto,
+	dto: UploadUnitDocumentDto,
 	context: AuditContext,
-): Promise<TrailerDocument> {
-	const trailer = await findTrailerById(orgId, trailerId);
-	if (!trailer) throw new NotFoundError("Trailer");
+): Promise<UnitDocument> {
+	const unit = await findUnitById(orgId, unitId);
+	if (!unit) throw new NotFoundError("Unit");
 
 	validateFile(file.mimetype, file.size);
 
@@ -159,12 +156,12 @@ export async function uploadTrailerDocument(
 		throw new ValidationError(`Tipo de documento inválido: ${dto.type}`);
 	}
 
-	const config = TRAILER_DOCUMENT_TYPE_CONFIG[dto.type];
+	const config = UNIT_DOCUMENT_TYPE_CONFIG[dto.type];
 
 	const key = generateS3Key(
-		"trailers",
+		"units",
 		orgId,
-		trailerId,
+		unitId,
 		"documents",
 		file.originalname,
 	);
@@ -175,7 +172,7 @@ export async function uploadTrailerDocument(
 	const expiresAt = parseDate(dto.expiresAt);
 	const alertDays = dto.alertDays ?? config.defaultAlertDays;
 
-	const docToInsert: Omit<TrailerDocumentEmbedded, "_id"> = {
+	const docToInsert: Omit<UnitDocumentEmbedded, "_id"> = {
 		type: dto.type,
 		name: dto.name?.trim() || file.originalname,
 		fileUrl: upload.url,
@@ -197,18 +194,18 @@ export async function uploadTrailerDocument(
 		deletedAt: null,
 	};
 
-	const created = await insertTrailerDocument(orgId, trailerId, docToInsert);
-	if (!created) throw new NotFoundError("Trailer");
+	const created = await insertUnitDocument(orgId, unitId, docToInsert);
+	if (!created) throw new NotFoundError("Unit");
 
 	logger.info(
-		{orgId, trailerId, docId: created.id, type: dto.type, key},
-		"Trailer document uploaded",
+		{orgId, unitId, docId: created.id, type: dto.type, key},
+		"Unit document uploaded",
 	);
 
 	await emitAuditEvent({
-		category: "trailers",
-		action: "trailer_document_uploaded",
-		target: {type: "trailer", id: trailerId, displayName: trailer.vin},
+		category: "units",
+		action: "unit_document_uploaded",
+		target: {type: "unit", id: unitId, displayName: unit.vin},
 		metadata: {
 			docId: created.id,
 			docType: dto.type,
@@ -221,17 +218,17 @@ export async function uploadTrailerDocument(
 	return created;
 }
 
-// ── Create from draft (asocia archivo previamente subido en /extract) ────
+// ── Create from draft ─────────────────────────────────────────────────────
 
 export async function createDocumentFromDraft(
 	orgId: string,
-	trailerId: string,
+	unitId: string,
 	actorId: string,
-	dto: CreateDocumentFromDraftDto,
+	dto: CreateUnitDocumentFromDraftDto,
 	context: AuditContext,
-): Promise<TrailerDocument> {
-	const trailer = await findTrailerById(orgId, trailerId);
-	if (!trailer) throw new NotFoundError("Trailer");
+): Promise<UnitDocument> {
+	const unit = await findUnitById(orgId, unitId);
+	if (!unit) throw new NotFoundError("Unit");
 
 	if (!isValidDraftKey(orgId, dto.draftKey)) {
 		throw new ValidationError("draftKey inválido o no pertenece a esta organización");
@@ -240,19 +237,18 @@ export async function createDocumentFromDraft(
 		throw new ValidationError(`Tipo de documento inválido: ${dto.type}`);
 	}
 
-	const config = TRAILER_DOCUMENT_TYPE_CONFIG[dto.type];
+	const config = UNIT_DOCUMENT_TYPE_CONFIG[dto.type];
 
-	// Mover el archivo de pending → ubicación final del trailer (server-side copy)
 	const destKey = generateS3Key(
-		"trailers",
+		"units",
 		orgId,
-		trailerId,
+		unitId,
 		"documents",
 		dto.fileName,
 	);
 	const copied = await copyFile(dto.draftKey, destKey);
 
-	// Borrar el draft (best effort — si falla, el cron lo limpia)
+	// Borrar el draft (best effort)
 	void deleteFile(dto.draftKey);
 
 	const now = new Date();
@@ -260,7 +256,7 @@ export async function createDocumentFromDraft(
 	const expiresAt = parseDate(dto.expiresAt);
 	const alertDays = dto.alertDays ?? config.defaultAlertDays;
 
-	const docToInsert: Omit<TrailerDocumentEmbedded, "_id"> = {
+	const docToInsert: Omit<UnitDocumentEmbedded, "_id"> = {
 		type: dto.type,
 		name: dto.name?.trim() || dto.fileName,
 		fileUrl: copied.url,
@@ -282,18 +278,18 @@ export async function createDocumentFromDraft(
 		deletedAt: null,
 	};
 
-	const created = await insertTrailerDocument(orgId, trailerId, docToInsert);
-	if (!created) throw new NotFoundError("Trailer");
+	const created = await insertUnitDocument(orgId, unitId, docToInsert);
+	if (!created) throw new NotFoundError("Unit");
 
 	logger.info(
-		{orgId, trailerId, docId: created.id, type: dto.type, destKey},
-		"Trailer document created from draft",
+		{orgId, unitId, docId: created.id, type: dto.type, destKey},
+		"Unit document created from draft",
 	);
 
 	await emitAuditEvent({
-		category: "trailers",
-		action: "trailer_document_uploaded",
-		target: {type: "trailer", id: trailerId, displayName: trailer.vin},
+		category: "units",
+		action: "unit_document_uploaded",
+		target: {type: "unit", id: unitId, displayName: unit.vin},
 		metadata: {
 			docId: created.id,
 			docType: dto.type,
@@ -309,20 +305,20 @@ export async function createDocumentFromDraft(
 
 // ── Update metadata ────────────────────────────────────────────────────────
 
-export async function updateTrailerDocument(
+export async function updateUnitDocument(
 	orgId: string,
 	id: string,
 	actorId: string,
-	dto: UpdateTrailerDocumentDto,
+	dto: UpdateUnitDocumentDto,
 	context: AuditContext,
-): Promise<TrailerDocument> {
-	const existing = await getTrailerDocument(orgId, id);
+): Promise<UnitDocument> {
+	const existing = await getUnitDocument(orgId, id);
 
 	if (dto.type && !isValidType(dto.type)) {
 		throw new ValidationError(`Tipo de documento inválido: ${dto.type}`);
 	}
 
-	const fields: Partial<TrailerDocumentEmbedded> = {};
+	const fields: Partial<UnitDocumentEmbedded> = {};
 	if (dto.type !== undefined) fields.type = dto.type;
 	if (dto.name !== undefined) fields.name = dto.name?.trim() || existing.name;
 	if (dto.issuedAt !== undefined) fields.issuedAt = parseDate(dto.issuedAt);
@@ -340,12 +336,12 @@ export async function updateTrailerDocument(
 	}
 
 	const updated = await updateDocumentFields(orgId, id, fields);
-	if (!updated) throw new NotFoundError("TrailerDocument");
+	if (!updated) throw new NotFoundError("UnitDocument");
 
 	await emitAuditEvent({
-		category: "trailers",
-		action: "trailer_document_updated",
-		target: {type: "trailer", id: existing.trailerId, displayName: existing.name},
+		category: "units",
+		action: "unit_document_updated",
+		target: {type: "unit", id: existing.unitId, displayName: existing.name},
 		metadata: {docId: id, fieldsChanged: Object.keys(fields)},
 		context,
 	});
@@ -355,20 +351,20 @@ export async function updateTrailerDocument(
 
 // ── Replace (renovación) ───────────────────────────────────────────────────
 
-export async function replaceTrailerDocument(
+export async function replaceUnitDocument(
 	orgId: string,
 	id: string,
 	actorId: string,
 	file: Express.Multer.File,
 	context: AuditContext,
-): Promise<TrailerDocument> {
-	const existing = await getTrailerDocument(orgId, id);
+): Promise<UnitDocument> {
+	const existing = await getUnitDocument(orgId, id);
 	validateFile(file.mimetype, file.size);
 
 	const key = generateS3Key(
-		"trailers",
+		"units",
 		orgId,
-		existing.trailerId,
+		existing.unitId,
 		"documents",
 		file.originalname,
 	);
@@ -388,12 +384,12 @@ export async function replaceTrailerDocument(
 		},
 	);
 
-	if (!updated) throw new NotFoundError("TrailerDocument");
+	if (!updated) throw new NotFoundError("UnitDocument");
 
 	await emitAuditEvent({
-		category: "trailers",
-		action: "trailer_document_replaced",
-		target: {type: "trailer", id: existing.trailerId, displayName: existing.name},
+		category: "units",
+		action: "unit_document_replaced",
+		target: {type: "unit", id: existing.unitId, displayName: existing.name},
 		metadata: {docId: id, previousFileUrl: existing.fileUrl},
 		context,
 	});
@@ -403,22 +399,21 @@ export async function replaceTrailerDocument(
 
 // ── Delete ─────────────────────────────────────────────────────────────────
 
-export async function deleteTrailerDocument(
+export async function deleteUnitDocument(
 	orgId: string,
 	id: string,
 	context: AuditContext,
 ): Promise<void> {
-	const existing = await getTrailerDocument(orgId, id);
+	const existing = await getUnitDocument(orgId, id);
 	const ok = await softDeleteDocument(orgId, id);
-	if (!ok) throw new NotFoundError("TrailerDocument");
+	if (!ok) throw new NotFoundError("UnitDocument");
 
-	// Best-effort: borrar de S3 (no bloqueante)
 	void deleteFile(extractKeyFromUrl(existing.fileUrl));
 
 	await emitAuditEvent({
-		category: "trailers",
-		action: "trailer_document_deleted",
-		target: {type: "trailer", id: existing.trailerId, displayName: existing.name},
+		category: "units",
+		action: "unit_document_deleted",
+		target: {type: "unit", id: existing.unitId, displayName: existing.name},
 		metadata: {docId: id, type: existing.type},
 		context,
 	});
@@ -426,13 +421,11 @@ export async function deleteTrailerDocument(
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function isValidType(type: string | undefined): type is TrailerDocumentType {
+function isValidType(type: string | undefined): type is UnitDocumentType {
 	if (!type) return false;
-	return Object.prototype.hasOwnProperty.call(TRAILER_DOCUMENT_TYPE_CONFIG, type);
+	return Object.prototype.hasOwnProperty.call(UNIT_DOCUMENT_TYPE_CONFIG, type);
 }
 
-/** Valida que un draftKey pertenezca al prefijo de la org. Defensa contra
- * inyección de URLs arbitrarias del bucket. */
 function isValidDraftKey(orgId: string, key: string | undefined): boolean {
 	if (!key || typeof key !== "string") return false;
 	const expected = `${DRAFT_PREFIX}/${orgId}/`;
@@ -446,5 +439,5 @@ function parseDate(value: string | Date | null | undefined): Date | null {
 	return Number.isNaN(d.getTime()) ? null : d;
 }
 
-// Re-export para el job de alertas
-export {countDocumentsByTrailer};
+// Re-export para el job de alertas (Fase 5)
+export {countDocumentsByUnit};

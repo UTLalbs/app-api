@@ -1,10 +1,11 @@
 import type {ObjectId} from "mongodb";
 
+import type {ExtractionConfidence} from "../../../infrastructure/http/document-extraction.types";
 import type {TrailerDocumentType} from "../constants/trailerDocumentTypes.constants";
 
 export type TrailerDocumentStatus = "pending" | "verified" | "expired" | "rejected";
 
-export type ExtractionConfidence = "high" | "medium" | "low";
+export type {ExtractionConfidence};
 
 // ── Subdocumentos ────────────────────────────────────────────────────────
 

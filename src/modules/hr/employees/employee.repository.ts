@@ -425,6 +425,41 @@ export async function updateEmployeeProfile(
 	return result ? await toUser(result as UserDocument) : null;
 }
 
+/**
+ * Actualiza solo `vehicleOperator.currentUnitId` sin tocar el resto del
+ * sub-objeto (licenses, medicalExam, etc.). Usado por el módulo `units`
+ * para mantener sincronía durante el período de doble-modelo (la fuente de
+ * verdad migra a `Unit.currentOperatorId`; este campo se deprecará).
+ *
+ * unitId === null libera al operador.
+ */
+export async function updateEmployeeCurrentUnit(
+	employeeId: string,
+	orgId: string,
+	unitId: string | null,
+): Promise<boolean> {
+	if (!ObjectId.isValid(employeeId) || !ObjectId.isValid(orgId)) return false;
+	if (unitId !== null && !ObjectId.isValid(unitId)) return false;
+
+	const result = await getUserCollection().updateOne(
+		{
+			_id: new ObjectId(employeeId),
+			orgId: new ObjectId(orgId),
+			"employeeProfile.isEmployee": true,
+		},
+		{
+			$set: {
+				"employeeProfile.vehicleOperator.currentUnitId": unitId
+					? new ObjectId(unitId)
+					: null,
+				updatedAt: new Date(),
+			},
+		},
+	);
+
+	return result.matchedCount > 0;
+}
+
 // ── Update employment status ─────────────────────────────────────────────
 export async function updateEmploymentStatus(
 	id: string,

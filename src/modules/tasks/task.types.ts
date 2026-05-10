@@ -8,6 +8,7 @@ export type TaskType =
 	| "invoice_issue"
 	| "license_expiry"
 	| "trailer_document_expiry"
+	| "unit_document_expiry"
 	| "fuel_alert"
 	| "custom";
 
